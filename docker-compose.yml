@@ -1,6 +1,8 @@
 services:
   # ============== Infra ==============
   etcd:
+    restart: unless-stopped
+    mem_limit: 128m
     image: quay.io/coreos/etcd:v3.5.13
     command:
       - /usr/local/bin/etcd
@@ -18,6 +20,8 @@ services:
       retries: 10
 
   nats:
+    restart: unless-stopped
+    mem_limit: 64m
     image: nats:2.10-alpine
     command: ["-js", "-m", "8222"]
     ports:
@@ -30,6 +34,8 @@ services:
       retries: 10
 
   jaeger:
+    restart: unless-stopped
+    mem_limit: 1g
     image: jaegertracing/all-in-one:1.57
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
@@ -38,6 +44,8 @@ services:
       - "4317"           # OTLP gRPC (internal)
 
   otel-collector:
+    restart: unless-stopped
+    mem_limit: 256m
     image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
@@ -49,6 +57,8 @@ services:
       - "4318:4318"
 
   prometheus:
+    restart: unless-stopped
+    mem_limit: 256m
     image: prom/prometheus:v2.51.2
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -57,6 +67,8 @@ services:
 
   # ============== App services ==============
   auth:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -79,6 +91,8 @@ services:
         condition: service_started
 
   order:
+    restart: unless-stopped
+    mem_limit: 256m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -101,6 +115,8 @@ services:
         condition: service_started
 
   inventory:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -123,6 +139,8 @@ services:
         condition: service_started
 
   notification:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -145,6 +163,8 @@ services:
         condition: service_started
 
   payments:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -167,6 +187,8 @@ services:
         condition: service_started
 
   fraud:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -189,6 +211,8 @@ services:
         condition: service_started
 
   shipping:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -211,6 +235,8 @@ services:
         condition: service_started
 
   recommendation:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -233,6 +259,8 @@ services:
         condition: service_started
 
   gateway:
+    restart: unless-stopped
+    mem_limit: 768m
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -245,8 +273,15 @@ services:
       ETCD_HOST: etcd
       NATS_URL: nats://nats:4222
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:8080}"
+      GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID:-}"
+      GOOGLE_OAUTH_CLIENT_SECRET: "${GOOGLE_OAUTH_CLIENT_SECRET:-}"
+      GOOGLE_OAUTH_REDIRECT_URI: "${GOOGLE_OAUTH_REDIRECT_URI:-}"
+      GOOGLE_OAUTH_STATE_SECRET: "${GOOGLE_OAUTH_STATE_SECRET:-}"
+      GOOGLE_OAUTH_ALLOWED_DOMAIN: "${GOOGLE_OAUTH_ALLOWED_DOMAIN:-}"
+      GOOGLE_OAUTH_ALLOWED_ORIGINS: "${GOOGLE_OAUTH_ALLOWED_ORIGINS:-}"
     ports:
-      - "8080:8080"
+      - "8081:8080"
     depends_on:
       - auth
       - order
@@ -258,6 +293,8 @@ services:
       - recommendation
 
   healer:
+    restart: unless-stopped
+    mem_limit: 1g
     build:
       context: .
       dockerfile: Dockerfile.python
@@ -283,20 +320,19 @@ services:
       - notification
 
   frontend:
+    restart: unless-stopped
+    mem_limit: 128m
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_GATEWAY_URL: ${VITE_GATEWAY_URL:-http://localhost:8080}
+        VITE_HEALER_URL:  ${VITE_HEALER_URL:-http://localhost:8090}
+        VITE_JAEGER_URL:  ${VITE_JAEGER_URL:-http://localhost:16686}
+        VITE_PROM_URL:    ${VITE_PROM_URL:-http://localhost:9090}
+        VITE_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     ports:
-      - "5173:5173"
-    environment:
-      VITE_GATEWAY_URL: http://localhost:8080
-      VITE_HEALER_URL: http://localhost:8090
-      CHOKIDAR_USEPOLLING: "true"
-    volumes:
-      - ./frontend/src:/app/src:ro
-      - ./frontend/public:/app/public:ro
-      - ./frontend/index.html:/app/index.html:ro
-      - ./frontend/vite.config.js:/app/vite.config.js:ro
+      - "8080:8080"
     depends_on:
       - gateway
       - healer
