@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:8080"]
+    metrics_path: /metrics
+  - job_name: order
+    static_configs:
+      - targets: ["order:9102"]
+  - job_name: inventory
+    static_configs:
+      - targets: ["inventory:9103"]
+  - job_name: notification
+    static_configs:
+      - targets: ["notification:9104"]
+  - job_name: auth
+    static_configs:
+      - targets: ["auth:9101"]
+  - job_name: payments
+    static_configs:
+      - targets: ["payments:9105"]
+  - job_name: fraud
+    static_configs:
+      - targets: ["fraud:9106"]
+  - job_name: shipping
+    static_configs:
+      - targets: ["shipping:9107"]
+  - job_name: recommendation
+    static_configs:
+      - targets: ["recommendation:9108"]
