@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — Mesh Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="brand-row">
+        <svg viewBox="0 0 24 24" fill="none">
+          <circle cx="6" cy="6" r="2" fill="var(--fg)" />
+          <circle cx="18" cy="6" r="2" fill="var(--fg)" />
+          <circle cx="12" cy="12" r="2.4" fill="var(--signal)" />
+          <circle cx="6" cy="18" r="2" fill="var(--fg)" />
+          <circle cx="18" cy="18" r="2" fill="var(--fg)" />
+          <path d="M6 6 L12 12 L18 6 M6 18 L12 12 L18 18" stroke="var(--hairline-3)" stroke-width="1" />
+        </svg>
+        <div class="name">Mesh<span>Control</span></div>
+      </div>
+
+      <h1>Sign in</h1>
+      <div class="sub">SRE control plane · production · us-west-2</div>
+
+      <form onsubmit="event.preventDefault(); window.location.href='/';">
+        <div class="field">
+          <span class="label">Work email</span>
+          <input type="email" required autocomplete="email" placeholder="jane@company.com" value="jordan.kang@vercel.com" />
+        </div>
+        <div class="field">
+          <span class="label">Password</span>
+          <input type="password" required autocomplete="current-password" placeholder="••••••••" value="••••••••••••" />
+        </div>
+
+        <div class="row-between">
+          <label class="check">
+            <input type="checkbox" checked style="accent-color: var(--signal); width: 13px; height: 13px;" />
+            Stay signed in for 30 days
+          </label>
+          <a href="#">Forgot?</a>
+        </div>
+
+        <button type="submit" class="submit">Sign in</button>
+      </form>
+
+      <div class="divider"></div>
+
+      <div class="sso-row">
+        <button type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24"><path fill="currentColor" d="M21.6 12.227c0-.708-.064-1.39-.182-2.045H12v3.868h5.382a4.6 4.6 0 0 1-1.995 3.018v2.51h3.232c1.891-1.745 2.981-4.314 2.981-7.351z"/><path fill="currentColor" d="M12 22c2.7 0 4.964-.895 6.619-2.422l-3.232-2.51c-.895.6-2.04.955-3.387.955-2.605 0-4.81-1.76-5.595-4.123H3.064v2.59A9.997 9.997 0 0 0 12 22z"/><path fill="currentColor" d="M6.405 13.9A6.005 6.005 0 0 1 6.09 12c0-.66.114-1.3.314-1.9V7.51H3.064A9.997 9.997 0 0 0 2 12c0 1.614.386 3.14 1.064 4.49l3.341-2.59z"/><path fill="currentColor" d="M12 5.977c1.468 0 2.786.504 3.823 1.496l2.868-2.868C16.959 2.991 14.695 2 12 2 8.09 2 4.708 4.247 3.064 7.51l3.341 2.59C7.19 7.737 9.395 5.977 12 5.977z"/></svg>
+          Google
+        </button>
+        <button type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 0H0v11.5h11.5V0zM24 0H12.5v11.5H24V0zM11.5 12.5H0V24h11.5V12.5zM24 12.5H12.5V24H24V12.5z"/></svg>
+          Microsoft
+        </button>
+      </div>
+
+      <div class="footer-note">
+        Need an account? <a href="#">Talk to your admin</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
