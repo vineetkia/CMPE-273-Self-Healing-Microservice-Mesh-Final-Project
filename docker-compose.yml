@@ -273,15 +273,8 @@ services:
       ETCD_HOST: etcd
       NATS_URL: nats://nats:4222
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:8080}"
-      GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID:-}"
-      GOOGLE_OAUTH_CLIENT_SECRET: "${GOOGLE_OAUTH_CLIENT_SECRET:-}"
-      GOOGLE_OAUTH_REDIRECT_URI: "${GOOGLE_OAUTH_REDIRECT_URI:-}"
-      GOOGLE_OAUTH_STATE_SECRET: "${GOOGLE_OAUTH_STATE_SECRET:-}"
-      GOOGLE_OAUTH_ALLOWED_DOMAIN: "${GOOGLE_OAUTH_ALLOWED_DOMAIN:-}"
-      GOOGLE_OAUTH_ALLOWED_ORIGINS: "${GOOGLE_OAUTH_ALLOWED_ORIGINS:-}"
     ports:
-      - "8081:8080"
+      - "8080:8080"
     depends_on:
       - auth
       - order
@@ -330,9 +323,8 @@ services:
         VITE_HEALER_URL:  ${VITE_HEALER_URL:-http://localhost:8090}
         VITE_JAEGER_URL:  ${VITE_JAEGER_URL:-http://localhost:16686}
         VITE_PROM_URL:    ${VITE_PROM_URL:-http://localhost:9090}
-        VITE_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     ports:
-      - "8080:8080"
+      - "5173:5173"
     depends_on:
       - gateway
       - healer
