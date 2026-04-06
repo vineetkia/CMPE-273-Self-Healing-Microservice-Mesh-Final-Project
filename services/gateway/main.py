@@ -1,22 +1,13 @@
-import base64
-import hashlib
-import hmac
-import json
 import os
-import secrets
 import time
 import threading
 import grpc
-import httpx
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from starlette.responses import Response, RedirectResponse
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from starlette.responses import Response
 
 import mesh_pb2 as pb
 import mesh_pb2_grpc as pb_grpc
@@ -76,154 +67,6 @@ def _validate_token(token: str) -> Optional[str]:
     except Exception as e:
         log.warning(f"validate failed: {e}")
         return None
-
-
-# ============== Google OAuth helpers ==============
-GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-GOOGLE_STATE_TTL_S = 10 * 60
-
-
-def _google_client_id() -> str:
-    return os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
-
-
-def _google_client_secret() -> str:
-    return os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
-
-
-def _google_configured() -> bool:
-    return bool(_google_client_id() and _google_client_secret())
-
-
-def _frontend_url() -> str:
-    return os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
-
-
-def _origin(url: str) -> str:
-    p = urlsplit(url)
-    return f"{p.scheme}://{p.netloc}" if p.scheme and p.netloc else ""
-
-
-def _allowed_return_origins() -> set[str]:
-    origins = {_origin(_frontend_url())}
-    for raw in os.getenv("GOOGLE_OAUTH_ALLOWED_ORIGINS", "").split(","):
-        if raw.strip():
-            origins.add(_origin(raw.strip().rstrip("/")))
-    return {o for o in origins if o}
-
-
-def _default_return_to(route: str = "dashboard") -> str:
-    return f"{_frontend_url()}/#/{route}"
-
-
-def _safe_return_to(return_to: Optional[str]) -> str:
-    if not return_to:
-        return _default_return_to()
-    parsed = urlsplit(return_to)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return _default_return_to()
-    if _origin(return_to) not in _allowed_return_origins():
-        return _default_return_to()
-    return return_to
-
-
-def _google_redirect_uri(request: Request) -> str:
-    return os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "").strip() or str(request.url_for("auth_google_callback"))
-
-
-def _b64e(raw: bytes) -> str:
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
-
-
-def _b64d(value: str) -> bytes:
-    padded = value + ("=" * (-len(value) % 4))
-    return base64.urlsafe_b64decode(padded.encode())
-
-
-def _state_secret() -> bytes:
-    secret = os.getenv("GOOGLE_OAUTH_STATE_SECRET", "").strip() or _google_client_secret()
-    return secret.encode()
-
-
-def _sign_state_body(body: str) -> str:
-    digest = hmac.new(_state_secret(), body.encode(), hashlib.sha256).digest()
-    return _b64e(digest)
-
-
-def _make_google_state(return_to: str) -> tuple[str, str]:
-    nonce = secrets.token_urlsafe(24)
-    payload = {"ts": int(time.time()), "nonce": nonce, "return_to": return_to}
-    body = _b64e(json.dumps(payload, separators=(",", ":")).encode())
-    return f"{body}.{_sign_state_body(body)}", nonce
-
-
-def _verify_google_state(state: str) -> dict:
-    try:
-        body, sig = state.split(".", 1)
-    except ValueError as e:
-        raise ValueError("invalid state") from e
-    if not hmac.compare_digest(_sign_state_body(body), sig):
-        raise ValueError("invalid state signature")
-    payload = json.loads(_b64d(body))
-    ts = int(payload.get("ts", 0))
-    if ts <= 0 or time.time() - ts > GOOGLE_STATE_TTL_S:
-        raise ValueError("expired state")
-    if not payload.get("nonce"):
-        raise ValueError("missing nonce")
-    payload["return_to"] = _safe_return_to(payload.get("return_to"))
-    return payload
-
-
-def _validate_google_claims(claims: dict, nonce: str) -> None:
-    if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
-        raise ValueError("invalid issuer")
-    if claims.get("nonce") != nonce:
-        raise ValueError("invalid nonce")
-    if not claims.get("sub"):
-        raise ValueError("missing subject")
-    if not claims.get("email"):
-        raise ValueError("missing email")
-    if claims.get("email_verified") not in (True, "true", "True"):
-        raise ValueError("email not verified")
-    allowed_domain = os.getenv("GOOGLE_OAUTH_ALLOWED_DOMAIN", "").strip().lower()
-    if allowed_domain and (claims.get("hd") or "").lower() != allowed_domain:
-        raise ValueError("domain not allowed")
-
-
-def _verify_google_id_token(raw_id_token: str, nonce: str) -> dict:
-    if not raw_id_token:
-        raise ValueError("missing id token")
-    claims = google_id_token.verify_oauth2_token(
-        raw_id_token,
-        google_requests.Request(),
-        _google_client_id(),
-    )
-    _validate_google_claims(claims, nonce)
-    return claims
-
-
-def _append_hash_params(url: str, params: dict[str, str]) -> str:
-    parts = urlsplit(url)
-    fragment = parts.fragment or "/dashboard"
-    if not fragment.startswith("/"):
-        fragment = f"/{fragment}"
-    route, _, query = fragment.partition("?")
-    existing = [
-        (k, v) for k, v in parse_qsl(query, keep_blank_values=True)
-        if k not in {"oauth_token", "oauth_user", "oauth_error"}
-    ]
-    existing.extend((k, v) for k, v in params.items() if v)
-    next_query = urlencode(existing)
-    next_fragment = f"{route}?{next_query}" if next_query else route
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, next_fragment))
-
-
-def _oauth_error_redirect(message: str) -> RedirectResponse:
-    return RedirectResponse(
-        _append_hash_params(_default_return_to("login"), {"oauth_error": message}),
-        status_code=302,
-    )
 
 
 # ============== Models ==============
@@ -441,95 +284,6 @@ def services_health():
 
 
 # ============== Auth ==============
-@app.get("/auth/google/status")
-def auth_google_status(request: Request):
-    return {
-        "enabled": _google_configured(),
-        "redirect_uri": _google_redirect_uri(request),
-    }
-
-
-@app.get("/auth/google/login")
-def auth_google_login(request: Request, return_to: Optional[str] = None):
-    if not _google_configured():
-        raise HTTPException(503, "Google OAuth is not configured")
-
-    safe_return_to = _safe_return_to(return_to)
-    state, nonce = _make_google_state(safe_return_to)
-    params = {
-        "client_id": _google_client_id(),
-        "redirect_uri": _google_redirect_uri(request),
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-        "nonce": nonce,
-        "include_granted_scopes": "true",
-    }
-    allowed_domain = os.getenv("GOOGLE_OAUTH_ALLOWED_DOMAIN", "").strip().lower()
-    if allowed_domain:
-        params["hd"] = allowed_domain
-    return RedirectResponse(f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}", status_code=302)
-
-
-@app.get("/auth/google/callback")
-def auth_google_callback(
-    request: Request,
-    code: str = "",
-    state: str = "",
-    error: str = "",
-):
-    if error:
-        return _oauth_error_redirect(error)
-    if not code or not state:
-        return _oauth_error_redirect("missing google callback data")
-    if not _google_configured():
-        return _oauth_error_redirect("google oauth is not configured")
-
-    try:
-        state_payload = _verify_google_state(state)
-        token_response = httpx.post(
-            GOOGLE_TOKEN_ENDPOINT,
-            data={
-                "code": code,
-                "client_id": _google_client_id(),
-                "client_secret": _google_client_secret(),
-                "redirect_uri": _google_redirect_uri(request),
-                "grant_type": "authorization_code",
-            },
-            timeout=8.0,
-        )
-        token_response.raise_for_status()
-        token_body = token_response.json()
-        claims = _verify_google_id_token(token_body.get("id_token", ""), state_payload["nonce"])
-
-        ch = _channel("auth")
-        stub = pb_grpc.AuthServiceStub(ch)
-        rep = stub.OAuthLogin(
-            pb.OAuthLoginRequest(
-                provider="google",
-                subject=claims["sub"],
-                email=claims["email"],
-                display_name=claims.get("name") or claims["email"].split("@", 1)[0],
-            ),
-            timeout=2.0,
-        )
-        if not rep.ok or not rep.token:
-            log.warning(f"google oauth auth-service rejected login: {rep.message}")
-            return _oauth_error_redirect("mesh login failed")
-
-        target = _append_hash_params(
-            state_payload["return_to"],
-            {"oauth_token": rep.token, "oauth_user": rep.user},
-        )
-        return RedirectResponse(target, status_code=302)
-    except httpx.HTTPStatusError as e:
-        log.warning(f"google token exchange failed: {e.response.status_code} {e.response.text[:180]}")
-        return _oauth_error_redirect("google token exchange failed")
-    except Exception as e:
-        log.warning(f"google oauth callback failed: {e}")
-        return _oauth_error_redirect("google sign-in failed")
-
-
 @app.post("/login")
 def do_login(body: LoginIn):
     """Legacy login endpoint kept for compatibility with the scripted demo."""
