@@ -34,16 +34,25 @@ export function TrafficGenerator({ traffic, orders, onToggle, onRps, onBurst }) 
           </Tooltip>
         </div>
 
-        <div className="row" style={{ gap: "var(--s-3)", marginTop: "var(--s-3)" }}>
-          <span className="label" style={{ minWidth: 24 }}>1</span>
-          <input className="slider" type="range" min={1} max={48} step={1}
-            value={traffic.rps} onChange={(e) => onRps(parseInt(e.target.value, 10))} />
-          <span className="num" style={{ fontSize: 12, minWidth: 56, textAlign: "right" }}>{traffic.rps} rps</span>
-        </div>
+        <Tooltip
+          label="Target requests-per-second"
+          hint="Continuous load rate when traffic is running. Drag the handle or use the slider to dial it from 1 to 48 rps."
+        >
+          <div className="row" style={{ gap: "var(--s-3)", marginTop: "var(--s-3)" }}>
+            <span className="label" style={{ minWidth: 24 }}>1</span>
+            <input className="slider" type="range" min={1} max={48} step={1}
+              value={traffic.rps} onChange={(e) => onRps(parseInt(e.target.value, 10))} />
+            <span className="num" style={{ fontSize: 12, minWidth: 56, textAlign: "right" }}>{traffic.rps} rps</span>
+          </div>
+        </Tooltip>
 
-        <div className="log">
+        <div className={`log ${(orders || []).length === 0 ? "empty" : ""}`}>
           <div className="label">Recent orders</div>
-          {(orders || []).slice(0, 6).map((o, i) => {
+          {(orders || []).length === 0 ? (
+            <div className="log-empty">
+              No traffic yet — press <code>Start traffic</code> or <code>Burst 20</code>.
+            </div>
+          ) : (orders || []).slice(0, 6).map((o, i) => {
             // Display short form; full canonical id is preserved in `o.id`
             // for downstream use (refund/fraud-review "use last").
             const shortId = o.id ? `#${o.id.replace(/^ord-/, "").toUpperCase().slice(0, 8)}` : "#---";

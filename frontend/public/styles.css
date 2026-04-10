@@ -581,14 +581,37 @@ h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.015em; }
 @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
 
 /* Action strip — sits directly under the hero. Two cards (Traffic + Chaos)
-   side by side; the user's primary interaction surface. */
+   side by side; the user's primary interaction surface.
+   `align-items: stretch` keeps both cards at the same height. The shorter
+   card uses its inner card-body as a flex column with `justify-content:
+   space-between` so its sections distribute through the available height
+   instead of bunching at the top with dead space below. */
 .action-strip {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--s-5);
+  align-items: stretch;
 }
-.action-strip > .card { min-width: 0; }
-@media (max-width: 1100px) { .action-strip { grid-template-columns: 1fr; } }
+.action-strip > .card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.action-strip > .card .card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+/* Recent-orders log absorbs the slack so the card's overall height stays
+   consistent with its sibling without dead space appearing between
+   sections. */
+.action-strip > .card .log { flex: 1; min-height: 100px; }
+@media (max-width: 1100px) {
+  .action-strip { grid-template-columns: 1fr; }
+  .action-strip > .card { display: block; }
+  .action-strip > .card .card-body { display: block; }
+}
 
 /* ------------------------------------------------------------------ Pill */
 .pill {
@@ -1012,6 +1035,21 @@ h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.015em; }
   overflow: hidden;
   position: relative;
   mask-image: linear-gradient(to bottom, transparent 0, #000 18px, #000 100%);
+}
+.log.empty { mask-image: none; }
+.log-empty {
+  font-size: 12px;
+  color: var(--fg-3);
+  padding: var(--s-2) 0 var(--s-1);
+}
+.log-empty code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  background: var(--bg-2);
+  border: 1px solid var(--hairline);
+  padding: 0.5px 6px;
+  border-radius: 4px;
+  color: var(--fg);
 }
 .log .label { margin-bottom: var(--s-3); }
 .log-row {
