@@ -28,6 +28,20 @@ export function CountUp({ value, decimals = 0, suffix = "", className = "" }) {
   return <span className={`num ${className}`}>{shown.toFixed(decimals)}{suffix}</span>;
 }
 
+/* Format a latency in *milliseconds* (possibly sub-ms) for display.
+   Auto-switches units so the value is always readable:
+     <1ms  -> "120µs"
+     <10ms -> "1.4ms"
+     else  -> "42ms"
+   Returns a string. Use this anywhere you'd show a p95 / call latency. */
+export function formatLatency(ms) {
+  const v = Number(ms) || 0;
+  if (v <= 0) return "0ms";
+  if (v < 1)  return `${Math.round(v * 1000)}µs`;
+  if (v < 10) return `${v.toFixed(1)}ms`;
+  return `${Math.round(v)}ms`;
+}
+
 export function StatusPill({ status, label, transmitting = false }) {
   return (
     <span className={`pill ${status || "unknown"}`}>

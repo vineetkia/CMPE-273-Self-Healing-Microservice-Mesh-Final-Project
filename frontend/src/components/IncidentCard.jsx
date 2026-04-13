@@ -3,8 +3,9 @@
    agent action log, mark-resolved + re-run-rca buttons. */
 
 import React from "react";
-import { StatusPill, CheckGlyph, Tooltip, relTime } from "./Primitives";
+import { StatusPill, CheckGlyph, XGlyph, Tooltip, relTime } from "./Primitives";
 import { MiniDependencyGraph } from "./DependencyGraph";
+import { explainIncident, explainAction } from "../lib/plainEnglish";
 
 export function IncidentCard({ incident, services, edges, layout, actions, onMarkResolved }) {
   if (!incident) {
@@ -63,8 +64,13 @@ export function IncidentCard({ incident, services, edges, layout, actions, onMar
         </div>
       </div>
 
+      <div className="plain-explain">
+        <div className="label">What happened, in plain English</div>
+        <p className="plain-body">{explainIncident(incident)}</p>
+      </div>
+
       <div className="rca">
-        <div className="label">Root cause analysis</div>
+        <div className="label">Technical analysis</div>
         {(incident.rca || []).map((step, i) => (
           <div key={i} className={`rca-step ${step.therefore ? "therefore" : ""}`}>
             <div className="conn">{step.conn}</div>
@@ -82,21 +88,35 @@ export function IncidentCard({ incident, services, edges, layout, actions, onMar
         </div>
       )}
 
-      <div className="actions">
-        <div className="label">Agent actions</div>
-        {incActions.length === 0 ? (
-          <div style={{ color: "var(--fg-3)", fontSize: 12 }}>—</div>
+      <div className="actions plain-actions">
+        <div className="label">Remediation steps the agent took</div>
+        {(incident.actions || []).length === 0 ? (
+          <div style={{ color: "var(--fg-3)", fontSize: 12 }}>The agent is still analysing — no actions yet.</div>
         ) : (
-          incActions.map(a => (
-            <div key={a.id} className="action-row">
-              <div className="ts">{relTime(a.ts)}</div>
-              <div className="glyph">→</div>
-              <div className="body">
-                {a.verb} <span className={`v ${a.tag === "chaos" ? "warn" : ""}`}>{a.target}</span>
+          incident.actions.map((a, idx) => {
+            const e = explainAction(a, incident.rootCause);
+            if (!e) return null;
+            return (
+              <div key={`${a.service}-${a.action}-${idx}`} className={`plain-action-row ${e.ok ? "ok" : "err"}`}>
+                <div className="ok-glyph">
+                  {e.ok ? <CheckGlyph size={11} color="var(--signal)" /> : <XGlyph size={11} color="var(--crit)" />}
+                </div>
+                <div className="step-num">{idx + 1}</div>
+                <div className="step-body">
+                  <div className="step-title">
+                    {e.title} <span className="step-target">on <code>{e.target}</code></span>
+                  </div>
+                  {e.targetBlurb ? (
+                    <div className="step-blurb">
+                      <span className="step-blurb-label">about <code>{e.target}</code>:</span> {e.targetBlurb}
+                    </div>
+                  ) : null}
+                  <div className="step-why">{e.why}</div>
+                  <div className="step-raw">technical: <code>{e.raw}</code></div>
+                </div>
               </div>
-              <div className="tag">{a.tag}</div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

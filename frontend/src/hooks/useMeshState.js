@@ -76,7 +76,18 @@ export function useMeshState(interval = 1500) {
         sparksRef.current = nextSparks;
         setSparks(nextSparks);
 
-        const globalRps = Math.round(merged.order.rps || 0);
+        // Global rps = end-user request rate (one number per user request).
+        // We can't read this from `gateway` directly — gateway is FastAPI and
+        // doesn't publish to mesh.events, only to OTel. So we pick the busiest
+        // *entry-tier* service: auth.Validate fires once per authenticated
+        // request, before order's circuit-breaker can short-circuit anything,
+        // so it's a reliable lower bound on user-facing throughput. We take
+        // the max with order.rps as a fallback for flows that bypass auth.
+        const entryRps = Math.max(
+          merged.auth?.rps || 0,
+          merged.order?.rps || 0,
+        );
+        const globalRps = Math.round(entryRps);
         const nextPulse = [...pulseRef.current.slice(1), globalRps];
         pulseRef.current = nextPulse;
         setPulse(nextPulse);
