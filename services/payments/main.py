@@ -10,7 +10,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -43,7 +43,7 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
         if state.apply() == "error":
             REQS.labels("authorize", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Authorize", False, int((time.time() - t0) * 1000))
+            _emit("Authorize", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("payments authorize failure injected")
             return pb.AuthorizeReply(ok=False, charge_id="", message="auth failed")
@@ -56,7 +56,7 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
             ORDER_TO_CHARGE[request.order_id] = charge_id
         REQS.labels("authorize", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Authorize", True, int((time.time() - t0) * 1000))
+        _emit("Authorize", True, elapsed_ms(t0))
         return pb.AuthorizeReply(ok=True, charge_id=charge_id, message="authorized")
 
     def Capture(self, request, context):
@@ -64,7 +64,7 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
         if state.apply() == "error":
             REQS.labels("capture", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Capture", False, int((time.time() - t0) * 1000))
+            _emit("Capture", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.CaptureReply(ok=False, message="capture failure injected")
         c = CHARGES.get(request.charge_id)
@@ -74,7 +74,7 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
         c["captured"] = True
         REQS.labels("capture", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Capture", True, int((time.time() - t0) * 1000))
+        _emit("Capture", True, elapsed_ms(t0))
         return pb.CaptureReply(ok=True, message="captured")
 
     def Refund(self, request, context):
@@ -82,7 +82,7 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
         if state.apply() == "error":
             REQS.labels("refund", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Refund", False, int((time.time() - t0) * 1000))
+            _emit("Refund", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.RefundReply(ok=False, message="refund failure injected")
         # Resolve synthetic ids of the form `ch_for_<order_id>` for refund
@@ -103,14 +103,14 @@ class PaymentsServicer(pb_grpc.PaymentsServiceServicer):
             if synthetic:
                 REQS.labels("refund", "synthetic_ok").inc()
                 LAT.observe(time.time() - t0)
-                _emit("Refund", True, int((time.time() - t0) * 1000))
+                _emit("Refund", True, elapsed_ms(t0))
                 return pb.RefundReply(ok=True, message=f"refunded {request.amount_cents} cents (no prior charge)")
             REQS.labels("refund", "missing").inc()
             return pb.RefundReply(ok=False, message="charge not found")
         c["refunded_cents"] += request.amount_cents
         REQS.labels("refund", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Refund", True, int((time.time() - t0) * 1000))
+        _emit("Refund", True, elapsed_ms(t0))
         return pb.RefundReply(ok=True, message=f"refunded {request.amount_cents} cents")
 
     def Health(self, request, context):

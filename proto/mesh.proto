@@ -25,6 +25,19 @@ message LoginReply    { bool ok = 1; string token = 2; string message = 3; }
 message ValidateRequest { string token = 1; }
 message ValidateReply   { bool ok = 1; string user = 2; }
 
+message OAuthLoginRequest {
+  string provider = 1;      // google
+  string subject = 2;       // provider-stable user id
+  string email = 3;
+  string display_name = 4;
+}
+message OAuthLoginReply {
+  bool ok = 1;
+  string token = 2;
+  string user = 3;
+  string message = 4;
+}
+
 message RegisterRequest {
   string email = 1;
   string password = 2;
@@ -48,6 +61,7 @@ message GetMeReply {
 
 service AuthService {
   rpc Login(LoginRequest)         returns (LoginReply);
+  rpc OAuthLogin(OAuthLoginRequest) returns (OAuthLoginReply);
   rpc Register(RegisterRequest)   returns (RegisterReply);
   rpc Validate(ValidateRequest)   returns (ValidateReply);
   rpc GetMe(GetMeRequest)         returns (GetMeReply);

@@ -10,7 +10,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register, lookup
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.resilience import retry_with_backoff, CircuitBreaker, CircuitOpenError
 from shared.chaos_listener import start as start_chaos_listener
@@ -181,7 +181,7 @@ class OrderServicer(pb_grpc.OrderServiceServicer):
             LAT.observe(time.time() - t0)
             publish_event_sync("mesh.events", {
                 "type": "rpc", "service": SERVICE, "method": "MergeCart",
-                "ok": False, "latency_ms": int((time.time() - t0) * 1000),
+                "ok": False, "latency_ms": elapsed_ms(t0),
             })
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.MergeCartReply(ok=False, merged_items=0, message="merge failure injected")
@@ -205,7 +205,7 @@ class OrderServicer(pb_grpc.OrderServiceServicer):
         LAT.observe(time.time() - t0)
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "MergeCart",
-            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": True, "latency_ms": elapsed_ms(t0),
         })
         return pb.MergeCartReply(ok=True, merged_items=len(in_stock), message=f"merged {len(in_stock)}/{len(request.skus)}")
 

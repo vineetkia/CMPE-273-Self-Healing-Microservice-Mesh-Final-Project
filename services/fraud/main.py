@@ -10,7 +10,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -37,7 +37,7 @@ class FraudServicer(pb_grpc.FraudServiceServicer):
         if state.apply() == "error":
             REQS.labels("score", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Score", False, int((time.time() - t0) * 1000))
+            _emit("Score", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.ScoreReply(ok=False, score=0, decision="error", reason="fraud failure injected")
 
@@ -57,7 +57,7 @@ class FraudServicer(pb_grpc.FraudServiceServicer):
 
         REQS.labels("score", decision).inc()
         LAT.observe(time.time() - t0)
-        _emit("Score", True, int((time.time() - t0) * 1000))
+        _emit("Score", True, elapsed_ms(t0))
         return pb.ScoreReply(ok=True, score=score, decision=decision, reason=reason)
 
     def Health(self, request, context):

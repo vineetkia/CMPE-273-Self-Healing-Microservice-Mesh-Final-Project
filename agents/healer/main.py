@@ -70,7 +70,11 @@ SERVICE = "healer"
 DEPENDENCIES = {
     "gateway":        ["order", "auth", "inventory", "recommendation"],
     "order":          ["auth", "inventory", "notification", "payments", "fraud", "shipping"],
-    "recommendation": ["inventory"],
+    # recommendation only reads its own in-memory HISTORY + CATALOG; the
+    # inventory cross-check in the recommendations flow is performed by the
+    # gateway, not by recommendation itself. So recommendation has no real
+    # service-to-service downstream dependencies in the demo.
+    "recommendation": [],
     "auth":           [],
     "inventory":      [],
     "notification":   [],
@@ -101,7 +105,11 @@ ERROR_RATE_BAD = 0.20
 
 @dataclass
 class ServiceStats:
-    events: deque = field(default_factory=lambda: deque(maxlen=200))
+    # Buffer = 2000 events per service. At our 20s analysis window, 200 was
+    # only enough for ~10 rps before the deque started dropping old events
+    # *and* saturating `n`, making the dashboard underreport throughput at
+    # rates >10 rps. 2000 covers up to 100 rps per service comfortably.
+    events: deque = field(default_factory=lambda: deque(maxlen=2000))
     health: str = "unknown"
 
     def add(self, ev: dict[str, Any]) -> None:
@@ -116,8 +124,11 @@ class ServiceStats:
         rpc_events = [e for e in win if e.get("type") == "rpc"]
         n = len(rpc_events)
         errs = sum(1 for e in rpc_events if not e.get("ok"))
-        lats = sorted(int(e.get("latency_ms", 0)) for e in rpc_events)
-        p95 = lats[int(len(lats) * 0.95) - 1] if lats else 0
+        # latency_ms may be float (sub-ms precision); keep it that way for
+        # the percentile, round only on the way out. 3 decimals preserves
+        # microsecond resolution so the UI can render "37µs" for fast paths.
+        lats = sorted(float(e.get("latency_ms", 0)) for e in rpc_events)
+        p95 = round(lats[int(len(lats) * 0.95) - 1], 3) if lats else 0
         return {
             "n": n,
             "error_rate": (errs / n) if n else 0.0,
@@ -309,7 +320,7 @@ Your job: given a snapshot of per-service telemetry, identify the root cause of 
 Topology (caller -> dependencies):
   gateway        -> [order, auth, inventory, recommendation]
   order          -> [auth, inventory, notification, payments, fraud, shipping]
-  recommendation -> [inventory]
+  recommendation -> []   (the gateway does the inventory cross-check for the recommendations flow, not recommendation itself)
   auth, inventory, notification, payments, fraud, shipping -> []
 
 The mesh exposes several real e-commerce flows: checkout (order+fraud+payments+shipping+notify), refund (payments+inventory+notify), cart_merge (inventory), restock (inventory+recommendation), fraud_review (fraud+notify), recommendations (recommendation+inventory).
