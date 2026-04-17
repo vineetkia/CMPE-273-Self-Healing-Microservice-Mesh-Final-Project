@@ -3,6 +3,7 @@
    aware particles, click-to-drill. */
 
 import React, { useState, useEffect, useRef } from "react";
+import { formatLatency } from "./Primitives";
 
 const NODE_W = 168;
 const NODE_H = 64;
@@ -98,7 +99,7 @@ function ServiceNode({ svc, pos, m, focused, faulty, victim, onPointerDown, kind
         {kind === "edge" ? "EDGE" : "SVC"}
       </text>
       <text x={14} y={44} fontFamily="var(--mono)" fontSize="11" fill="var(--fg-2)" pointerEvents="none">p95</text>
-      <text x={42} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{Math.round(m.p95)}ms</text>
+      <text x={42} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{formatLatency(m.p95)}</text>
       <text x={94} y={44} fontFamily="var(--mono)" fontSize="11" fill="var(--fg-2)" pointerEvents="none">err</text>
       <text x={118} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{(m.err * 100).toFixed(1)}%</text>
       <text x={14} y={56} fontFamily="var(--mono)" fontSize="10" fill="var(--fg-3)" pointerEvents="none">{Math.round(m.rps)} rps</text>
@@ -142,10 +143,18 @@ function Edge({ a, b, faulty, p95, traffic }) {
   );
 }
 
+// Default zoom: graph viewport is 1100x480 designed for an 8-service flow at
+// 1× scale. On a typical 1440px-wide layout the surrounding card crops the
+// edges, so we ship at 0.5× which fits all 8 nodes and their edges with
+// breathing room inside the visible region on first paint.
+const DEFAULT_ZOOM = 0.5;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 3.0;
+
 export function DependencyGraph({ services, edges, layout, health, focused, faulty, traffic, onFocus, onBgClick }) {
   const [, setTick] = useState(0);
-  const liveRef = useRef({ pan: { x: 0, y: 0 }, zoom: 1 });
-  const targetRef = useRef({ pan: { x: 0, y: 0 }, zoom: 1 });
+  const liveRef = useRef({ pan: { x: 0, y: 0 }, zoom: DEFAULT_ZOOM });
+  const targetRef = useRef({ pan: { x: 0, y: 0 }, zoom: DEFAULT_ZOOM });
   const rafRef = useRef(0);
   const overridesRef = useRef({});
   const dragRef = useRef(null);
@@ -154,8 +163,8 @@ export function DependencyGraph({ services, edges, layout, health, focused, faul
 
   useEffect(() => {
     overridesRef.current = {};
-    targetRef.current = { pan: { x: 0, y: 0 }, zoom: 1 };
-    liveRef.current = { pan: { x: 0, y: 0 }, zoom: 1 };
+    targetRef.current = { pan: { x: 0, y: 0 }, zoom: DEFAULT_ZOOM };
+    liveRef.current = { pan: { x: 0, y: 0 }, zoom: DEFAULT_ZOOM };
     setTick(t => t + 1);
   }, [flowKey]);
 
@@ -194,7 +203,7 @@ export function DependencyGraph({ services, edges, layout, health, focused, faul
     const { x: mx, y: my } = clientToView(e.clientX, e.clientY);
     const t = targetRef.current;
     const factor = e.deltaY > 0 ? 0.92 : 1.08;
-    const newZoom = Math.max(0.5, Math.min(3, t.zoom * factor));
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, t.zoom * factor));
     const wx = (mx - t.pan.x) / t.zoom;
     const wy = (my - t.pan.y) / t.zoom;
     t.pan = { x: mx - wx * newZoom, y: my - wy * newZoom };
@@ -273,13 +282,13 @@ export function DependencyGraph({ services, edges, layout, health, focused, faul
     const ay = anchor?.y ?? VIEW_H / 2;
     const wx = (ax - t.pan.x) / t.zoom;
     const wy = (ay - t.pan.y) / t.zoom;
-    t.zoom = Math.max(0.5, Math.min(3, newZoom));
+    t.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     t.pan = { x: ax - wx * t.zoom, y: ay - wy * t.zoom };
   };
 
   const fitView = () => {
     overridesRef.current = {};
-    targetRef.current = { pan: { x: 0, y: 0 }, zoom: 1 };
+    targetRef.current = { pan: { x: 0, y: 0 }, zoom: DEFAULT_ZOOM };
   };
 
   const positionsFor = (svcId) => overridesRef.current[svcId] || layout[svcId];
