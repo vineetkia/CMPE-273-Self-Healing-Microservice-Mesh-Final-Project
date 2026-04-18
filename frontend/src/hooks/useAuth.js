@@ -5,9 +5,20 @@ import * as Auth from "../api/auth";
    Tries to validate any stored token on mount; if invalid, drops it.
    Returns { token, user, status, login, register, logout }. */
 export function useAuth() {
-  const [token, setToken] = useState(() => Auth.getStoredToken());
+  const [initialAuth] = useState(() => Auth.readInitialAuthState());
+  const [oauthError, setOauthError] = useState(initialAuth.oauthError);
+  const [token, setToken] = useState(initialAuth.token);
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState("loading"); // loading | anon | authed | error
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    Auth.googleStatus().then((r) => {
+      if (alive) setGoogleEnabled(Boolean(r.enabled));
+    });
+    return () => { alive = false; };
+  }, []);
 
   // Validate any persisted token on mount.
   useEffect(() => {
@@ -35,6 +46,7 @@ export function useAuth() {
   }, [token]);
 
   const doLogin = useCallback(async ({ user: u, password }) => {
+    setOauthError("");
     const r = await Auth.login({ user: u, password });
     if (r.ok && r.token) {
       Auth.setStoredToken(r.token);
@@ -45,6 +57,7 @@ export function useAuth() {
   }, []);
 
   const doRegister = useCallback(async ({ email, password, display_name }) => {
+    setOauthError("");
     const r = await Auth.register({ email, password, display_name });
     if (r.ok && r.token) {
       Auth.setStoredToken(r.token);
@@ -61,5 +74,20 @@ export function useAuth() {
     setStatus("anon");
   }, [token]);
 
-  return { token, user, status, login: doLogin, register: doRegister, logout: doLogout };
+  const doGoogleLogin = useCallback(() => {
+    setOauthError("");
+    Auth.startGoogleLogin();
+  }, []);
+
+  return {
+    token,
+    user,
+    status,
+    oauthError,
+    googleEnabled,
+    login: doLogin,
+    googleLogin: doGoogleLogin,
+    register: doRegister,
+    logout: doLogout,
+  };
 }

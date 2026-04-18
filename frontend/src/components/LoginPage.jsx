@@ -2,10 +2,19 @@
 
 import React, { useState } from "react";
 
-export function LoginPage({ onSubmit, onSwitchRegister, onSwitchLanding, busy }) {
+export function LoginPage({
+  onSubmit,
+  onGoogle,
+  onSwitchRegister,
+  onSwitchLanding,
+  busy,
+  oauthError,
+  googleEnabled,
+}) {
   const [user, setUser] = useState("demo");
   const [password, setPassword] = useState("x");
   const [err, setErr] = useState("");
+  const shownError = err || oauthError;
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -52,14 +61,19 @@ export function LoginPage({ onSubmit, onSwitchRegister, onSwitchLanding, busy })
             />
           </div>
 
-          {err ? <div className="auth-error">{err}</div> : null}
+          {shownError ? <div className="auth-error">{shownError}</div> : null}
 
           <button type="submit" className="submit" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <div className="divider"></div>
+        <div className="divider"><span>or</span></div>
+
+        <button type="button" className="oauth-btn" onClick={onGoogle} disabled={busy || !googleEnabled}>
+          <span className="google-mark" aria-hidden="true">G</span>
+          {googleEnabled ? "Continue with Google" : "Google sign-in not configured"}
+        </button>
 
         <div className="footer-note">
           New here? <a href="#/register" onClick={(e) => { e.preventDefault(); onSwitchRegister(); }}>Create an account</a>

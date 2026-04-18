@@ -14,7 +14,7 @@ import { TrafficGenerator } from "./components/TrafficGenerator";
 import { ChaosPanel } from "./components/ChaosPanel";
 import { ServiceDrillPanel } from "./components/ServiceDrillPanel";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
-import { CountUp, formatLatency } from "./components/Primitives";
+import { CountUp } from "./components/Primitives";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
 import { RegisterPage } from "./components/RegisterPage";
@@ -131,24 +131,6 @@ export default function App() {
 
   // Dashboard (authed)
   return <Dashboard auth={auth} navigate={navigate} />;
-}
-
-/* Build a Jaeger search URL pre-filtered to the active flow's gateway
-   operation. The OTel FastAPI instrumentation names the parent span using
-   the HTTP method + route, so a flow with endpoint "POST /checkout" maps
-   to operation "POST /checkout" under service "gateway". For path-param
-   endpoints like "GET /recommendations/{user}" Jaeger uses the templated
-   form (not the substituted one), so the dropdown value matches the
-   endpoint string from /flows verbatim. */
-function jaegerSearchUrl(flow) {
-  const op = flow.endpoint || "";
-  const params = new URLSearchParams({
-    service: "gateway",
-    operation: op,
-    limit: "20",
-    lookback: "15m",
-  });
-  return `${JAEGER_URL}/search?${params.toString()}`;
 }
 
 /* The dashboard surface: extracted so its hooks only run when the user is
@@ -269,18 +251,6 @@ function Dashboard({ auth, navigate }) {
                 <span className="sep">/</span>
                 <span>{flow.services.length} services</span>
               </div>
-              <a
-                className="jaeger-link"
-                href={jaegerSearchUrl(flow)}
-                target="_blank"
-                rel="noreferrer"
-                title="Open recent traces for this flow in Jaeger"
-              >
-                <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                  <path d="M5 2 L10 2 L10 7 M10 2 L4 8 M2 4 L2 10 L8 10" stroke="currentColor" strokeWidth="1.1" />
-                </svg>
-                Traces
-              </a>
             </div>
             <div className="hero-stats">
               <div className="stat">
@@ -288,7 +258,7 @@ function Dashboard({ auth, navigate }) {
                 <div className="l">requests / sec</div>
               </div>
               <div className="stat">
-                <div className="v num">{formatLatency(flowP95)}</div>
+                <div className="v"><CountUp value={flowP95} decimals={0} suffix="ms" /></div>
                 <div className="l">flow p95</div>
               </div>
               <div className="stat">
