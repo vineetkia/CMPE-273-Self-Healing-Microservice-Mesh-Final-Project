@@ -1575,3 +1575,139 @@ h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.015em; }
 /* Make the boot splash + auth shell respect the body background uniformly */
 .boot-splash, .landing, .profile-shell, .auth-shell { color: var(--fg); }
 .muted { color: var(--fg-3); }
+
+/* ==================================================================
+   Plain-English incident explanations
+   Used by IncidentCard (live) + IncidentHistory (closed).
+   ================================================================== */
+.plain-explain {
+  padding: var(--s-4) var(--s-5);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--bg-1);
+}
+.plain-explain .label { margin-bottom: var(--s-2); }
+.plain-explain .plain-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--fg);
+  text-wrap: pretty;
+  max-width: 72ch;
+}
+.plain-explain .plain-body code,
+.plain-action-row code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--hairline);
+  color: var(--fg);
+}
+
+.plain-actions { padding: var(--s-4) var(--s-5); }
+.plain-actions .label { margin-bottom: var(--s-3); }
+
+.plain-action-row {
+  display: grid;
+  grid-template-columns: 16px 22px 1fr;
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-3) 0;
+  border-top: 1px dashed var(--hairline);
+}
+.plain-action-row:first-of-type { border-top: 0; }
+.plain-action-row .ok-glyph { padding-top: 2px; }
+.plain-action-row .step-num {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--hairline-2);
+  background: var(--bg-2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px;
+  color: var(--fg-2);
+}
+.plain-action-row .step-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.plain-action-row .step-title {
+  font-size: 13.5px;
+  color: var(--fg);
+  letter-spacing: -0.005em;
+}
+.plain-action-row .step-target { color: var(--fg-3); font-weight: 400; }
+.plain-action-row .step-blurb {
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.45;
+  font-style: italic;
+  max-width: 70ch;
+}
+.plain-action-row .step-blurb code {
+  font-style: normal;
+}
+.plain-action-row .step-blurb .step-blurb-label {
+  color: var(--fg-4);
+  margin-right: 4px;
+}
+.plain-action-row .step-why {
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  text-wrap: pretty;
+  max-width: 70ch;
+}
+.plain-action-row .step-raw {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--fg-4);
+  font-family: var(--ui);
+}
+.plain-action-row .step-raw code {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.plain-action-row.err .step-title { color: var(--crit); }
+
+/* Incident-history expand: summary + blast-radius side-by-side at top */
+.hist-expand .hist-explain-row {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--s-4);
+  align-items: start;
+  border-bottom: 1px solid var(--hairline);
+}
+.hist-expand .hist-summary {
+  border-bottom: 0;            /* the row owns the bottom border */
+  background: transparent;     /* expand row already has its own bg */
+  padding: var(--s-4) var(--s-5) var(--s-3);
+}
+.hist-expand .hist-mini-graph {
+  width: auto;                 /* let the grid column own the width */
+  margin: var(--s-3) var(--s-4) var(--s-3) 0;
+}
+@media (max-width: 1100px) {
+  .hist-expand .hist-explain-row { grid-template-columns: 1fr; }
+  .hist-expand .hist-mini-graph { margin: 0 var(--s-4) var(--s-4); }
+}
+
+/* "Traces" link in hero crumbs — deep-links into Jaeger for the active flow */
+.hero-overlay .jaeger-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: var(--s-3);
+  padding: 2px 8px;
+  height: 22px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--fg-3);
+  pointer-events: auto;
+  transition: color var(--t-hover), border-color var(--t-hover), background var(--t-hover);
+  text-decoration: none;
+}
+.hero-overlay .jaeger-link:hover {
+  color: var(--fg);
+  border-color: var(--hairline-3);
+  background: var(--bg-2);
+}
