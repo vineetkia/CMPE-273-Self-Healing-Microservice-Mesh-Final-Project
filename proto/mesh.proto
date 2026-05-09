@@ -21,15 +21,38 @@ message ControlReply {
 
 // ==== Auth ====
 message LoginRequest  { string user = 1; string password = 2; }
-message LoginReply    { bool ok = 1; string token = 2; }
+message LoginReply    { bool ok = 1; string token = 2; string message = 3; }
 message ValidateRequest { string token = 1; }
 message ValidateReply   { bool ok = 1; string user = 2; }
 
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+}
+message RegisterReply {
+  bool ok = 1;
+  string token = 2;
+  string user = 3;
+  string message = 4;
+}
+
+message GetMeRequest { string token = 1; }
+message GetMeReply {
+  bool ok = 1;
+  string user = 2;
+  string display_name = 3;
+  string email = 4;
+  int64 created_ts_ms = 5;
+}
+
 service AuthService {
-  rpc Login(LoginRequest) returns (LoginReply);
-  rpc Validate(ValidateRequest) returns (ValidateReply);
-  rpc Health(Empty) returns (HealthReply);
-  rpc Control(ControlRequest) returns (ControlReply);
+  rpc Login(LoginRequest)         returns (LoginReply);
+  rpc Register(RegisterRequest)   returns (RegisterReply);
+  rpc Validate(ValidateRequest)   returns (ValidateReply);
+  rpc GetMe(GetMeRequest)         returns (GetMeReply);
+  rpc Health(Empty)               returns (HealthReply);
+  rpc Control(ControlRequest)     returns (ControlReply);
 }
 
 // ==== Inventory ====
@@ -59,10 +82,34 @@ service InventoryService {
 message NotifyRequest { string user = 1; string message = 2; }
 message NotifyReply   { bool ok = 1; }
 
+message ListNotificationsRequest { string user = 1; int32 limit = 2; }
+message Notification {
+  string id = 1;
+  string user = 2;
+  string message = 3;
+  string kind = 4;        // info | warning | incident
+  int64 ts_ms = 5;
+  bool read = 6;
+}
+message ListNotificationsReply {
+  bool ok = 1;
+  int32 unread = 2;
+  repeated Notification items = 3;
+}
+
+message MarkReadRequest { string user = 1; string notification_id = 2; }
+message MarkReadReply   { bool ok = 1; int32 unread = 2; }
+
+message MarkAllReadRequest { string user = 1; }
+message MarkAllReadReply   { bool ok = 1; }
+
 service NotificationService {
-  rpc Notify(NotifyRequest)   returns (NotifyReply);
-  rpc Health(Empty)           returns (HealthReply);
-  rpc Control(ControlRequest) returns (ControlReply);
+  rpc Notify(NotifyRequest)                       returns (NotifyReply);
+  rpc List(ListNotificationsRequest)              returns (ListNotificationsReply);
+  rpc MarkRead(MarkReadRequest)                   returns (MarkReadReply);
+  rpc MarkAllRead(MarkAllReadRequest)             returns (MarkAllReadReply);
+  rpc Health(Empty)                               returns (HealthReply);
+  rpc Control(ControlRequest)                     returns (ControlReply);
 }
 
 // ==== Order ====
