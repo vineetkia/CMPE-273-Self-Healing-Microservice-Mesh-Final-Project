@@ -75,6 +75,21 @@ class LoginIn(BaseModel):
     password: str = "x"
 
 
+class RegisterIn(BaseModel):
+    email: str
+    password: str
+    display_name: str = ""
+
+
+class TokenIn(BaseModel):
+    token: str
+
+
+class MarkReadIn(BaseModel):
+    token: str
+    notification_id: str
+
+
 class OrderIn(BaseModel):
     token: str
     sku: str
@@ -271,17 +286,127 @@ def services_health():
 # ============== Auth ==============
 @app.post("/login")
 def do_login(body: LoginIn):
+    """Legacy login endpoint kept for compatibility with the scripted demo."""
     t0 = time.time()
     ch = _channel("auth")
     stub = pb_grpc.AuthServiceStub(ch)
     try:
         rep = stub.Login(pb.LoginRequest(user=body.user, password=body.password), timeout=2.0)
-        REQS.labels("/login", "ok").inc()
+        REQS.labels("/login", "ok" if rep.ok else "denied").inc()
         LAT.labels("/login").observe(time.time() - t0)
-        return {"ok": rep.ok, "token": rep.token}
+        return {"ok": rep.ok, "token": rep.token, "message": rep.message}
     except Exception as e:
         REQS.labels("/login", "err").inc()
         raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.post("/auth/register")
+def auth_register(body: RegisterIn):
+    t0 = time.time()
+    ch = _channel("auth")
+    stub = pb_grpc.AuthServiceStub(ch)
+    try:
+        rep = stub.Register(
+            pb.RegisterRequest(
+                email=body.email, password=body.password,
+                display_name=body.display_name,
+            ),
+            timeout=2.0,
+        )
+        REQS.labels("/auth/register", "ok" if rep.ok else "rejected").inc()
+        LAT.labels("/auth/register").observe(time.time() - t0)
+        return {"ok": rep.ok, "token": rep.token, "user": rep.user, "message": rep.message}
+    except grpc.RpcError as e:
+        REQS.labels("/auth/register", "err").inc()
+        return {"ok": False, "token": "", "user": "", "message": f"rpc {e.code().name}"}
+
+
+@app.post("/auth/login")
+def auth_login(body: LoginIn):
+    """Same effect as /login but under a more conventional path."""
+    return do_login(body)
+
+
+@app.post("/auth/me")
+def auth_me(body: TokenIn):
+    ch = _channel("auth")
+    stub = pb_grpc.AuthServiceStub(ch)
+    try:
+        rep = stub.GetMe(pb.GetMeRequest(token=body.token), timeout=2.0)
+        if not rep.ok:
+            return {"ok": False, "message": "invalid token"}
+        return {
+            "ok": True,
+            "user": rep.user,
+            "display_name": rep.display_name,
+            "email": rep.email,
+            "created_ts_ms": rep.created_ts_ms,
+        }
+    except grpc.RpcError as e:
+        return {"ok": False, "message": f"rpc {e.code().name}"}
+
+
+@app.post("/auth/logout")
+def auth_logout(body: TokenIn):
+    """Stateless logout for the demo: the client drops the token; we do
+    nothing server-side since tokens are otherwise still valid until the
+    auth service restarts. Adequate for a class project."""
+    return {"ok": True}
+
+
+# ============== Notifications ==============
+@app.post("/notifications")
+def list_notifications(body: TokenIn):
+    user = _validate_token(body.token)
+    if not user:
+        raise HTTPException(401, "invalid token")
+    try:
+        ch = _channel("notification")
+        stub = pb_grpc.NotificationServiceStub(ch)
+        rep = stub.List(pb.ListNotificationsRequest(user=user, limit=30), timeout=2.0)
+        return {
+            "ok": rep.ok,
+            "unread": rep.unread,
+            "items": [
+                {
+                    "id": n.id, "user": n.user, "message": n.message,
+                    "kind": n.kind, "ts_ms": n.ts_ms, "read": n.read,
+                } for n in rep.items
+            ],
+        }
+    except grpc.RpcError as e:
+        return {"ok": False, "unread": 0, "items": [], "message": f"rpc {e.code().name}"}
+
+
+@app.post("/notifications/mark-read")
+def mark_notification_read(body: MarkReadIn):
+    user = _validate_token(body.token)
+    if not user:
+        raise HTTPException(401, "invalid token")
+    try:
+        ch = _channel("notification")
+        stub = pb_grpc.NotificationServiceStub(ch)
+        rep = stub.MarkRead(
+            pb.MarkReadRequest(user=user, notification_id=body.notification_id),
+            timeout=2.0,
+        )
+        return {"ok": rep.ok, "unread": rep.unread}
+    except grpc.RpcError as e:
+        return {"ok": False, "unread": 0, "message": f"rpc {e.code().name}"}
+
+
+@app.post("/notifications/mark-all-read")
+def mark_all_notifications_read(body: TokenIn):
+    user = _validate_token(body.token)
+    if not user:
+        raise HTTPException(401, "invalid token")
+    try:
+        ch = _channel("notification")
+        stub = pb_grpc.NotificationServiceStub(ch)
+        rep = stub.MarkAllRead(pb.MarkAllReadRequest(user=user), timeout=2.0)
+        return {"ok": rep.ok}
+    except grpc.RpcError as e:
+        return {"ok": False, "message": f"rpc {e.code().name}"}
 
 
 # ============== Endpoint 1: place a single order (existing) ==============
@@ -703,26 +828,32 @@ def _scripted_demo_thread(flow: str, token: str):
 
 
 def _drive_flow(flow: str, token: str):
-    """Hit the right endpoint to exercise a flow. Used by scripted demo."""
-    import httpx
-    base = "http://localhost:8080"
-    if flow == "checkout":
-        httpx.post(f"{base}/checkout", json={"token": token, "sku": "sku-1", "qty": 1, "zip": "94103"}, timeout=6.0)
-    elif flow == "refund":
-        # Place a small order first, then refund it.
-        r = httpx.post(f"{base}/orders", json={"token": token, "sku": "sku-1", "qty": 1}, timeout=6.0).json()
-        if r.get("ok"):
-            httpx.post(f"{base}/refund", json={"token": token, "order_id": r["order_id"]}, timeout=6.0)
-    elif flow == "cart_merge":
-        httpx.post(f"{base}/cart/merge", json={"token": token, "guest_cart_id": "g1", "skus": ["sku-1", "sku-2", "sku-3"]}, timeout=6.0)
-    elif flow == "restock":
-        httpx.post(f"{base}/inventory/restock", json={"token": token, "sku": "sku-2", "qty": 5}, timeout=6.0)
-    elif flow == "fraud_review":
-        r = httpx.post(f"{base}/orders", json={"token": token, "sku": "sku-1", "qty": 1}, timeout=6.0).json()
-        if r.get("ok"):
-            httpx.post(f"{base}/fraud/review", json={"token": token, "order_id": r["order_id"]}, timeout=6.0)
-    elif flow == "recommendations":
-        httpx.get(f"{base}/recommendations/demo", timeout=6.0)
+    """Exercise a flow's endpoint by calling its handler directly in-process.
+
+    Avoids HTTP loopback entirely so the demo works identically inside
+    Compose, on Fargate, or behind any reverse proxy. Each branch invokes
+    the same handler the public REST endpoint binds to.
+    """
+    try:
+        if flow == "checkout":
+            checkout(CheckoutIn(token=token, sku="sku-1", qty=1, zip="94103"))
+        elif flow == "refund":
+            r = place_order(OrderIn(token=token, sku="sku-1", qty=1))
+            if r.get("ok"):
+                refund(RefundIn(token=token, order_id=r["order_id"]))
+        elif flow == "cart_merge":
+            cart_merge(CartMergeIn(token=token, guest_cart_id="g1",
+                                   skus=["sku-1", "sku-2", "sku-3"]))
+        elif flow == "restock":
+            inventory_restock(RestockIn(token=token, sku="sku-2", qty=5))
+        elif flow == "fraud_review":
+            r = place_order(OrderIn(token=token, sku="sku-1", qty=1))
+            if r.get("ok"):
+                fraud_review(FraudReviewIn(token=token, order_id=r["order_id"]))
+        elif flow == "recommendations":
+            recommendations("demo", limit=4)
+    except Exception as e:
+        log.warning(f"_drive_flow {flow}: {e}")
 
 
 @app.post("/demo/scripted")

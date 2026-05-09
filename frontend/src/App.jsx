@@ -1,4 +1,5 @@
-/* App — composes real-API hooks and renders the v2 dashboard. */
+/* App — top-level router. Picks landing/login/register/dashboard/profile.
+   Auth gates the dashboard; landing is the unauthenticated home. */
 
 import React, { useEffect, useMemo, useState } from "react";
 import { TopBar } from "./components/TopBar";
@@ -14,6 +15,11 @@ import { ChaosPanel } from "./components/ChaosPanel";
 import { ServiceDrillPanel } from "./components/ServiceDrillPanel";
 import { ShortcutOverlay } from "./components/ShortcutOverlay";
 import { CountUp } from "./components/Primitives";
+import { LandingPage } from "./components/LandingPage";
+import { LoginPage } from "./components/LoginPage";
+import { RegisterPage } from "./components/RegisterPage";
+import { ProfilePage } from "./components/ProfilePage";
+import { NotificationBell } from "./components/NotificationBell";
 
 import { useFlows } from "./hooks/useFlows";
 import { useMeshState } from "./hooks/useMeshState";
@@ -21,14 +27,118 @@ import { useTraffic } from "./hooks/useTraffic";
 import { useChaos } from "./hooks/useChaos";
 import { useFlowExerciser } from "./hooks/useFlowExerciser";
 import { useDrillCalls } from "./hooks/useDrillCalls";
+import { useAuth } from "./hooks/useAuth";
+import { useNotifications } from "./hooks/useNotifications";
+import { useRoute } from "./hooks/useRoute";
+import { JAEGER_URL, PROM_URL } from "./api/config";
 
 export default function App() {
+  const auth = useAuth();
+  const { route, navigate } = useRoute();
+  const [busy, setBusy] = useState(false);
+
+  // Pick what to render based on route + auth status.
+  // Defaults: anon → landing; authed → dashboard.
+  const effectiveRoute = useMemo(() => {
+    if (auth.status === "loading") return "loading";
+    const isAuthed = auth.status === "authed";
+    if (!route) return isAuthed ? "dashboard" : "landing";
+    if ((route === "dashboard" || route === "profile") && !isAuthed) return "landing";
+    if ((route === "login" || route === "register") && isAuthed) return "dashboard";
+    return route;
+  }, [route, auth.status]);
+
+  // Reflect that effective route in the URL hash without recursion.
+  useEffect(() => {
+    if (effectiveRoute === "loading") return;
+    const want = `#/${effectiveRoute}`;
+    if (window.location.hash !== want) window.location.hash = want;
+  }, [effectiveRoute]);
+
+  // Loading state — quick splash while we validate any persisted token.
+  if (effectiveRoute === "loading") {
+    return (
+      <div className="boot-splash">
+        <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
+          <circle cx="6" cy="6" r="2" fill="var(--fg)" />
+          <circle cx="18" cy="6" r="2" fill="var(--fg)" />
+          <circle cx="12" cy="12" r="2.4" fill="var(--signal)"><animate attributeName="opacity" values="1;0.3;1" dur="1.2s" repeatCount="indefinite" /></circle>
+          <circle cx="6" cy="18" r="2" fill="var(--fg)" />
+          <circle cx="18" cy="18" r="2" fill="var(--fg)" />
+        </svg>
+        <div className="muted">Mesh Control · checking session</div>
+      </div>
+    );
+  }
+
+  if (effectiveRoute === "landing") {
+    return (
+      <LandingPage
+        onLogin={() => navigate("login")}
+        onRegister={() => navigate("register")}
+      />
+    );
+  }
+
+  if (effectiveRoute === "login") {
+    return (
+      <LoginPage
+        busy={busy}
+        onSwitchRegister={() => navigate("register")}
+        onSwitchLanding={() => navigate("landing")}
+        onSubmit={async (creds) => {
+          setBusy(true);
+          try { return await auth.login(creds); }
+          finally { setBusy(false); }
+        }}
+      />
+    );
+  }
+
+  if (effectiveRoute === "register") {
+    return (
+      <RegisterPage
+        busy={busy}
+        onSwitchLogin={() => navigate("login")}
+        onSwitchLanding={() => navigate("landing")}
+        onSubmit={async (form) => {
+          setBusy(true);
+          try { return await auth.register(form); }
+          finally { setBusy(false); }
+        }}
+      />
+    );
+  }
+
+  if (effectiveRoute === "profile") {
+    return (
+      <ProfilePage
+        user={auth.user}
+        onBack={() => navigate("dashboard")}
+        onLogout={async () => {
+          await auth.logout();
+          navigate("landing");
+        }}
+      />
+    );
+  }
+
+  // Dashboard (authed)
+  return <Dashboard auth={auth} navigate={navigate} />;
+}
+
+/* The dashboard surface: extracted so its hooks only run when the user is
+   actually authenticated. Mounting it unconditionally would fire /flows,
+   /services/health, /state polls before the user logs in — wasteful and
+   could trigger CORS noise on the landing page. */
+function Dashboard({ auth, navigate }) {
   const flows = useFlows("checkout");
   const mesh = useMeshState(1500);
   const traffic = useTraffic();
   const chaos = useChaos();
   const exer = useFlowExerciser();
   const drillCalls = useDrillCalls(mesh.decisions);
+  const notif = useNotifications(auth.token);
 
   const [drill, setDrill] = useState(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -46,9 +156,6 @@ export default function App() {
     [flow.services, mesh.services],
   );
   const flowEdges = flow.edges;
-  // Recompute layout whenever the active flow changes — keyed off the
-  // activeFlow id (always reactive) plus the services/edges arrays so a
-  // backend response with same-size flows still triggers a recompute.
   const layout = useMemo(
     () => computeLayout(flowServices, flowEdges),
     [flows.activeFlow, flowServices.length, flowEdges.length],
@@ -81,8 +188,8 @@ export default function App() {
         return;
       }
       if (e.key === "g") { lastG = Date.now(); return; }
-      if (e.key === "j" && Date.now() - lastG < 800) { window.open("http://localhost:16686", "_blank"); return; }
-      if (e.key === "p" && Date.now() - lastG < 800) { window.open("http://localhost:9090", "_blank"); return; }
+      if (e.key === "j" && Date.now() - lastG < 800) { window.open(JAEGER_URL, "_blank"); return; }
+      if (e.key === "p" && Date.now() - lastG < 800) { window.open(PROM_URL,   "_blank"); return; }
       if (e.key === "c") { chaos.clearAll(); return; }
       if (e.key === "t") { traffic.setRunning(!traffic.traffic.running); return; }
     };
@@ -95,6 +202,15 @@ export default function App() {
     ? flowServices.reduce((a, sv) => a + (mesh.health[sv.id]?.p95 || 0), 0) / flowServices.length
     : 0;
 
+  const notifBell = (
+    <NotificationBell
+      unread={notif.unread}
+      items={notif.items}
+      onMarkRead={notif.markRead}
+      onMarkAllRead={notif.markAllRead}
+    />
+  );
+
   return (
     <div className="app">
       <TopBar
@@ -103,6 +219,9 @@ export default function App() {
         lastIncidentAt={mesh.lastIncidentAt}
         bootedAt={mesh.bootedAt}
         onHelp={() => setShortcutsOpen(true)}
+        user={auth.user}
+        onProfile={() => navigate("profile")}
+        notifSlot={notifBell}
       />
 
       <FlowSelectorBand
@@ -168,9 +287,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Action strip: traffic + chaos sit directly under the graph as
-            the user's primary interaction surface. Side-by-side at full
-            width. Collapses to single column under 1100px. */}
         <div className="action-strip">
           <TrafficGenerator
             traffic={traffic.traffic}

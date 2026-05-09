@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { CountUp, PulseSparkline, IconBtn, Tooltip, durationStr } from "./Primitives";
+import { JAEGER_URL, PROM_URL } from "../api/config";
 
 function MeshMark() {
   return (
@@ -19,7 +20,10 @@ function MeshMark() {
   );
 }
 
-export function TopBar({ rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "production" }) {
+export function TopBar({
+  rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "production",
+  user, onProfile, onLogout, notifSlot,
+}) {
   const [, force] = useState(0);
   useEffect(() => {
     const i = setInterval(() => force(n => n + 1), 1000);
@@ -28,6 +32,11 @@ export function TopBar({ rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "pr
 
   const uptime = durationStr(Date.now() - bootedAt);
   const sinceInc = lastIncidentAt ? durationStr(Date.now() - lastIncidentAt) : "—";
+
+  const initials = user
+    ? (user.display_name || user.id || "?")
+        .split(/\s+/).map(s => s[0]).slice(0, 2).join("").toUpperCase()
+    : "JK";
 
   return (
     <header className="topbar">
@@ -70,7 +79,7 @@ export function TopBar({ rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "pr
       </div>
 
       <div className="tb-right">
-        <IconBtn href="http://localhost:16686"
+        <IconBtn href={JAEGER_URL}
           title="Open in Jaeger"
           tip="Distributed traces for the active flow. Opens in a new tab.">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -78,7 +87,7 @@ export function TopBar({ rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "pr
             <path d="M7 7.5 L7 12 M4 12 L10 12" stroke="currentColor" strokeWidth="1.1" />
           </svg>
         </IconBtn>
-        <IconBtn href="http://localhost:9090"
+        <IconBtn href={PROM_URL}
           title="Open in Prometheus"
           tip="Raw mesh metrics — request_total, error_rate, p95. Opens in a new tab.">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -96,8 +105,15 @@ export function TopBar({ rps, pulse, lastIncidentAt, bootedAt, onHelp, env = "pr
             <path d="M5 5.5 a2 2 0 0 1 4 0 c0 1.2 -2 1.3 -2 2.5 M7 10.5 L7 10.6" stroke="currentColor" strokeWidth="1.1" fill="none" strokeLinecap="round" />
           </svg>
         </IconBtn>
-        <Tooltip label="Profile & settings" hint="Manage your account, notifications, sessions and API tokens." side="bottom">
-          <a className="avatar" href="/Settings.html" style={{ textDecoration: "none" }}>JK</a>
+        {notifSlot}
+        <Tooltip
+          label={user ? `${user.display_name || user.id}` : "Profile"}
+          hint="Open your profile, manage the session, sign out."
+          side="bottom"
+        >
+          <button className="avatar" onClick={onProfile} style={{ cursor: "pointer" }}>
+            {initials}
+          </button>
         </Tooltip>
       </div>
     </header>

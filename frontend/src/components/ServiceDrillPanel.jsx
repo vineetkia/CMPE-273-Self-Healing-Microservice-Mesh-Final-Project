@@ -7,6 +7,7 @@ import {
   StatusPill, CountUp, MetricSparkline, IconBtn, Tooltip,
   CheckGlyph, XGlyph, ExtLink, relTime,
 } from "./Primitives";
+import { JAEGER_URL, PROM_URL } from "../api/config";
 
 export function ServiceDrillPanel({ svc, services, health, sparks, calls, onClose, onJumpToChaos }) {
   useEffect(() => {
@@ -110,11 +111,11 @@ export function ServiceDrillPanel({ svc, services, health, sparks, calls, onClos
       </div>
 
       <div className="drill-foot">
-        <a className="foot-link" href={`http://localhost:16686/search?service=${svc}`} target="_blank" rel="noreferrer">
+        <a className="foot-link" href={`${JAEGER_URL}/search?service=${svc}`} target="_blank" rel="noreferrer">
           <span>Open in Jaeger</span>
           <span className="out"><ExtLink /></span>
         </a>
-        <a className="foot-link" href={`http://localhost:9090/graph?g0.expr=${svc}_requests_total`} target="_blank" rel="noreferrer">
+        <a className="foot-link" href={`${PROM_URL}/graph?g0.expr=${svc}_requests_total`} target="_blank" rel="noreferrer">
           <span>Open in Prometheus</span>
           <span className="out"><ExtLink /></span>
         </a>
