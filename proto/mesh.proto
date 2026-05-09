@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+package mesh;
+
+// ==== Common ====
+message Empty {}
+
+message HealthReply {
+  string service = 1;
+  string status = 2;   // healthy | degraded | unhealthy
+  int64  ts_ms   = 3;
+}
+
+message ControlRequest {
+  string action = 1;   // clear_failure | enable_fallback | disable_fallback | mark_degraded
+}
+message ControlReply {
+  bool ok = 1;
+  string message = 2;
+}
+
+// ==== Auth ====
+message LoginRequest  { string user = 1; string password = 2; }
+message LoginReply    { bool ok = 1; string token = 2; }
+message ValidateRequest { string token = 1; }
+message ValidateReply   { bool ok = 1; string user = 2; }
+
+service AuthService {
+  rpc Login(LoginRequest) returns (LoginReply);
+  rpc Validate(ValidateRequest) returns (ValidateReply);
+  rpc Health(Empty) returns (HealthReply);
+  rpc Control(ControlRequest) returns (ControlReply);
+}
+
+// ==== Inventory ====
+message ReserveRequest { string sku = 1; int32 qty = 2; }
+message ReserveReply   { bool ok = 1; string message = 2; int32 remaining = 3; }
+
+message ReleaseRequest { string sku = 1; int32 qty = 2; }
+message ReleaseReply   { bool ok = 1; int32 remaining = 2; }
+
+message RestockRequest { string sku = 1; int32 qty = 2; }
+message RestockReply   { bool ok = 1; int32 remaining = 2; }
+
+message StockCheckRequest { repeated string skus = 1; }
+message StockLevel { string sku = 1; int32 remaining = 2; }
+message StockCheckReply  { repeated StockLevel levels = 1; }
+
+service InventoryService {
+  rpc Reserve(ReserveRequest)       returns (ReserveReply);
+  rpc Release(ReleaseRequest)       returns (ReleaseReply);
+  rpc Restock(RestockRequest)       returns (RestockReply);
+  rpc StockCheck(StockCheckRequest) returns (StockCheckReply);
+  rpc Health(Empty)                 returns (HealthReply);
+  rpc Control(ControlRequest)       returns (ControlReply);
+}
+
+// ==== Notification ====
+message NotifyRequest { string user = 1; string message = 2; }
+message NotifyReply   { bool ok = 1; }
+
+service NotificationService {
+  rpc Notify(NotifyRequest)   returns (NotifyReply);
+  rpc Health(Empty)           returns (HealthReply);
+  rpc Control(ControlRequest) returns (ControlReply);
+}
+
+// ==== Order ====
+message PlaceOrderRequest {
+  string token = 1;
+  string sku = 2;
+  int32  qty = 3;
+}
+message PlaceOrderReply {
+  bool   ok = 1;
+  string order_id = 2;
+  string message = 3;
+}
+
+message GetOrderRequest { string order_id = 1; }
+message GetOrderReply   {
+  bool ok = 1;
+  string order_id = 2;
+  string user = 3;
+  string sku = 4;
+  int32 qty = 5;
+  string status = 6;     // placed | paid | shipped | refunded | held | cancelled
+  int32 amount_cents = 7;
+}
+
+message MergeCartRequest {
+  string token = 1;
+  string guest_cart_id = 2;
+  repeated string skus = 3;
+}
+message MergeCartReply {
+  bool ok = 1;
+  int32 merged_items = 2;
+  string message = 3;
+}
+
+message UpdateOrderStatusRequest {
+  string order_id = 1;
+  string status = 2;
+}
+message UpdateOrderStatusReply { bool ok = 1; }
+
+service OrderService {
+  rpc PlaceOrder(PlaceOrderRequest)             returns (PlaceOrderReply);
+  rpc GetOrder(GetOrderRequest)                 returns (GetOrderReply);
+  rpc MergeCart(MergeCartRequest)               returns (MergeCartReply);
+  rpc UpdateStatus(UpdateOrderStatusRequest)    returns (UpdateOrderStatusReply);
+  rpc Health(Empty)                             returns (HealthReply);
+  rpc Control(ControlRequest)                   returns (ControlReply);
+}
+
+// ==== Payments ====
+message AuthorizeRequest {
+  string user = 1;
+  string order_id = 2;
+  int32 amount_cents = 3;
+}
+message AuthorizeReply {
+  bool ok = 1;
+  string charge_id = 2;
+  string message = 3;
+}
+
+message CaptureRequest { string charge_id = 1; }
+message CaptureReply   { bool ok = 1; string message = 2; }
+
+message RefundRequest {
+  string charge_id = 1;
+  int32 amount_cents = 2;
+}
+message RefundReply { bool ok = 1; string message = 2; }
+
+service PaymentsService {
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeReply);
+  rpc Capture(CaptureRequest)     returns (CaptureReply);
+  rpc Refund(RefundRequest)       returns (RefundReply);
+  rpc Health(Empty)               returns (HealthReply);
+  rpc Control(ControlRequest)     returns (ControlReply);
+}
+
+// ==== Fraud ====
+message ScoreRequest {
+  string user = 1;
+  string order_id = 2;
+  int32 amount_cents = 3;
+}
+message ScoreReply {
+  bool ok = 1;
+  int32 score = 2;        // 0-100
+  string decision = 3;    // approve | review | deny
+  string reason = 4;
+}
+
+service FraudService {
+  rpc Score(ScoreRequest)        returns (ScoreReply);
+  rpc Health(Empty)              returns (HealthReply);
+  rpc Control(ControlRequest)    returns (ControlReply);
+}
+
+// ==== Shipping ====
+message QuoteRequest {
+  string sku = 1;
+  int32 qty = 2;
+  string zip = 3;
+}
+message QuoteReply {
+  bool ok = 1;
+  int32 cents = 2;
+  int32 eta_days = 3;
+}
+
+message LabelRequest {
+  string order_id = 1;
+  string user = 2;
+  string sku = 3;
+  int32 qty = 4;
+}
+message LabelReply { bool ok = 1; string tracking_id = 2; string message = 3; }
+
+service ShippingService {
+  rpc Quote(QuoteRequest)        returns (QuoteReply);
+  rpc CreateLabel(LabelRequest)  returns (LabelReply);
+  rpc Health(Empty)              returns (HealthReply);
+  rpc Control(ControlRequest)    returns (ControlReply);
+}
+
+// ==== Recommendation ====
+message SuggestRequest {
+  string user = 1;
+  int32 limit = 2;
+}
+message SuggestReply {
+  bool ok = 1;
+  repeated string skus = 2;
+}
+
+message RecordEventRequest {
+  string user = 1;
+  string event = 2;        // view | purchase | restock
+  string sku = 3;
+}
+message RecordEventReply { bool ok = 1; }
+
+service RecommendationService {
+  rpc Suggest(SuggestRequest)        returns (SuggestReply);
+  rpc RecordEvent(RecordEventRequest) returns (RecordEventReply);
+  rpc Health(Empty)                  returns (HealthReply);
+  rpc Control(ControlRequest)        returns (ControlReply);
+}

@@ -1,0 +1,36 @@
+# Generic Python service Dockerfile.
+# Build context: project root.
+# Build args:
+#   SERVICE_DIR: e.g. services/order, services/gateway, agents/healer
+#   ENTRYPOINT_MODULE: python module to run, e.g. services.order.main
+FROM python:3.11-slim
+ARG SERVICE_DIR
+ARG ENTRYPOINT_MODULE
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+COPY shared/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY shared /app/shared
+COPY proto /app/proto
+COPY ${SERVICE_DIR} /app/svc
+
+# Install service-specific extras if the service ships its own requirements.txt.
+RUN if [ -f /app/svc/requirements.txt ]; then \
+        pip install --no-cache-dir -r /app/svc/requirements.txt; \
+    fi
+
+RUN mkdir -p /app/genproto && \
+    python -m grpc_tools.protoc -I/app/proto \
+        --python_out=/app/genproto \
+        --grpc_python_out=/app/genproto \
+        /app/proto/mesh.proto && \
+    touch /app/genproto/__init__.py
+
+ENV PYTHONPATH=/app:/app/genproto:/app/svc
+ENV ENTRYPOINT_MODULE=${ENTRYPOINT_MODULE}
+
+CMD ["sh", "-c", "python -m ${ENTRYPOINT_MODULE}"]

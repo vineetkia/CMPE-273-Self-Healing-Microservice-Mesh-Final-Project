@@ -1,0 +1,302 @@
+services:
+  # ============== Infra ==============
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.13
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd0
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+    ports:
+      - "2379:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # UI
+      - "4317"           # OTLP gRPC (internal)
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.99.0
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    depends_on:
+      - jaeger
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  # ============== App services ==============
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/auth
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: auth
+      PORT: "50051"
+      METRICS_PORT: "9101"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  order:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/order
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: order
+      PORT: "50052"
+      METRICS_PORT: "9102"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  inventory:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/inventory
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: inventory
+      PORT: "50053"
+      METRICS_PORT: "9103"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  notification:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/notification
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: notification
+      PORT: "50054"
+      METRICS_PORT: "9104"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  payments:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/payments
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: payments
+      PORT: "50055"
+      METRICS_PORT: "9105"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  fraud:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/fraud
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: fraud
+      PORT: "50056"
+      METRICS_PORT: "9106"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  shipping:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/shipping
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: shipping
+      PORT: "50057"
+      METRICS_PORT: "9107"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  recommendation:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/recommendation
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: recommendation
+      PORT: "50058"
+      METRICS_PORT: "9108"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    depends_on:
+      etcd:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: services/gateway
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: gateway
+      PORT: "8080"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth
+      - order
+      - inventory
+      - notification
+      - payments
+      - fraud
+      - shipping
+      - recommendation
+
+  healer:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_DIR: agents/healer
+        ENTRYPOINT_MODULE: main
+    environment:
+      SERVICE_NAME: healer
+      PORT: "8090"
+      ETCD_HOST: etcd
+      NATS_URL: nats://nats:4222
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-}"
+      OPENAI_CHAT_MODEL: "${OPENAI_CHAT_MODEL:-}"
+      LOGFIRE_TOKEN: "${LOGFIRE_TOKEN:-}"
+    ports:
+      - "8090:8090"
+    depends_on:
+      - auth
+      - order
+      - inventory
+      - notification
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_GATEWAY_URL: http://localhost:8080
+      VITE_HEALER_URL: http://localhost:8090
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
+    depends_on:
+      - gateway
+      - healer

@@ -1,0 +1,4 @@
+# Healer-only extras. Installed on top of shared/requirements.txt.
+# Logfire is Pydantic's observability platform; we use it for LLM-call
+# instrumentation. Coexists with the existing OTel -> Jaeger pipeline.
+logfire>=3.0,<5
