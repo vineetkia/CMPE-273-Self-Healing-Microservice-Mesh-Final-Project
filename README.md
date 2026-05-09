@@ -55,7 +55,6 @@
 12. [Failure Injection Reference](#failure-injection-reference)
 13. [Manual Testing](#manual-testing)
 14. [Engineering Decisions & Tradeoffs](#engineering-decisions--tradeoffs)
-15. [License](#license)
 
 ---
 
@@ -774,18 +773,3 @@ A short list of things we chose deliberately and the reasoning:
 
 - **Mermaid + ASCII hybrid in this README.** GitHub renders Mermaid natively; ASCII is the fallback for terminal-based reviewers. Both express the same information.
 
----
-
-## License
-
-MIT — see [LICENSE](./LICENSE). Copyright © 2026 Vineet Kumar, Samved Sandeep Joshi, Girith Choudhary.
-
----
-
-<div align="center">
-
-**Built for CMPE-273: Enterprise Distributed Systems**
-**Spring 2026 · San José State University · Department of Computer Engineering**
-**Instructor: Prof. Rakesh Ranjan**
-
-</div>
