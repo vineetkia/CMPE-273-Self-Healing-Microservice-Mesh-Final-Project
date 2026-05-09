@@ -6,6 +6,14 @@ and a healing agent that uses an LLM (Azure GPT-5.3) to identify root causes and
 apply remediation actions, with a deterministic rule-based fallback so the demo
 never depends on the LLM staying up.
 
+## Team
+
+- Vineet Kumar
+- Samved Sandeep Joshi
+- Girith Choudhary
+
+**Instructor:** Prof. Rakesh Ranjan
+
 ```
                        ┌──────────────────┐
                        │  React UI :5173  │  Mesh Control dashboard
