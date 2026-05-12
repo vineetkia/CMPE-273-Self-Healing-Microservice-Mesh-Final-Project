@@ -84,8 +84,11 @@ export default function App() {
     return (
       <LoginPage
         busy={busy}
+        oauthError={auth.oauthError}
+        googleEnabled={auth.googleEnabled}
         onSwitchRegister={() => navigate("register")}
         onSwitchLanding={() => navigate("landing")}
+        onGoogle={() => auth.googleLogin()}
         onSubmit={async (creds) => {
           setBusy(true);
           try { return await auth.login(creds); }
@@ -99,8 +102,11 @@ export default function App() {
     return (
       <RegisterPage
         busy={busy}
+        oauthError={auth.oauthError}
+        googleEnabled={auth.googleEnabled}
         onSwitchLogin={() => navigate("login")}
         onSwitchLanding={() => navigate("landing")}
+        onGoogle={() => auth.googleLogin()}
         onSubmit={async (form) => {
           setBusy(true);
           try { return await auth.register(form); }

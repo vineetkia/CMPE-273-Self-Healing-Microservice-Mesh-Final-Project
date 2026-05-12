@@ -404,9 +404,25 @@ OPENAI_CHAT_MODEL=gpt-5.3-chat
 
 # Optional: Pydantic Logfire write token; ships LLM-call traces to logfire.pydantic.dev
 LOGFIRE_TOKEN=
+
+# Optional: Google OAuth sign-in for the React dashboard
+FRONTEND_URL=http://localhost:5173
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8080/auth/google/callback
+GOOGLE_OAUTH_STATE_SECRET=
+GOOGLE_OAUTH_ALLOWED_DOMAIN=
+GOOGLE_OAUTH_ALLOWED_ORIGINS=
 ```
 
-Without either of these, the agent falls back to deterministic rule-based reasoning — the demo runs identically.
+Without the OpenAI or Logfire settings, the agent falls back to deterministic rule-based reasoning — the demo runs identically. Without the Google settings, password/demo sign-in still works and the Google button stays disabled.
+
+For Google Cloud Console OAuth setup, create an **OAuth client ID** of type **Web application**. In the stock Docker Compose setup, use:
+
+- **Authorized JavaScript origins:** `http://localhost:5173`
+- **Authorized redirect URIs:** `http://localhost:8080/auth/google/callback`
+
+If you serve the frontend at `http://localhost:8080`, use `http://localhost:8080` as the JavaScript origin. The redirect URI must still point to the gateway callback that exchanges the authorization code; if gateway is also reachable on `8080`, keep `http://localhost:8080/auth/google/callback`. If the gateway is on another port or host, use that gateway origin instead.
 
 ---
 
@@ -772,4 +788,3 @@ A short list of things we chose deliberately and the reasoning:
 - **No UI library.** No Material, no Tailwind, no shadcn. Pure CSS variables + 13 hand-built React components. Every pixel is intentional. The dependency graph in particular is custom SVG with zoom/pan/drag/particle animation — no D3, no chart library.
 
 - **Mermaid + ASCII hybrid in this README.** GitHub renders Mermaid natively; ASCII is the fallback for terminal-based reviewers. Both express the same information.
-

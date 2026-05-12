@@ -27,12 +27,30 @@ state = FailureState()
 _USERS: dict[str, dict] = {}
 # token -> user_id
 _TOKENS: dict[str, str] = {}
+# provider:subject -> user_id
+_OAUTH_SUBJECTS: dict[str, str] = {}
 _USERS_LOCK = threading.Lock()
 
 
 def _hash(pw: str) -> str:
     # SHA256 with a fixed salt — demo only, not production.
     return hashlib.sha256(("mesh-control:" + pw).encode()).hexdigest()
+
+
+def _issue_token(user_id: str) -> str:
+    token = f"t-{user_id}-{uuid.uuid4().hex[:12]}"
+    _TOKENS[token] = user_id
+    return token
+
+
+def _safe_user_id(email: str, subject: str) -> str:
+    local = (email.split("@", 1)[0] if "@" in email else email).strip().lower()
+    base = "".join(ch if ch.isalnum() else "-" for ch in local).strip("-") or "google-user"
+    user_id = base
+    if user_id not in _USERS or _USERS[user_id].get("email") == email:
+        return user_id
+    suffix = "".join(ch for ch in subject.lower() if ch.isalnum())[:8] or uuid.uuid4().hex[:8]
+    return f"{base}-{suffix}"
 
 
 def _seed_demo_user():
@@ -65,7 +83,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
 
         with _USERS_LOCK:
             user = _USERS.get(request.user)
-            ok = user is not None and user["password_hash"] == _hash(request.password)
+            ok = user is not None and user.get("password_hash") == _hash(request.password)
 
         if not ok:
             REQS.labels("login", "denied").inc()
@@ -75,14 +93,58 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
             })
             return pb.LoginReply(ok=False, token="", message="invalid credentials")
 
-        token = f"t-{request.user}-{uuid.uuid4().hex[:12]}"
-        _TOKENS[token] = request.user
+        token = _issue_token(request.user)
         REQS.labels("login", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Login",
             "ok": True, "latency_ms": int((time.time() - t0) * 1000),
         })
         return pb.LoginReply(ok=True, token=token, message="ok")
+
+    def OAuthLogin(self, request, context):
+        t0 = time.time()
+        if state.apply() == "error":
+            REQS.labels("oauth_login", "err").inc()
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("auth oauth login failure injected")
+            return pb.OAuthLoginReply(ok=False, token="", user="", message="service unavailable")
+
+        provider = (request.provider or "").strip().lower()
+        subject = (request.subject or "").strip()
+        email = (request.email or "").strip().lower()
+        display_name = (request.display_name or "").strip()
+        if provider != "google":
+            REQS.labels("oauth_login", "bad_provider").inc()
+            return pb.OAuthLoginReply(ok=False, token="", user="", message="unsupported provider")
+        if not subject or "@" not in email:
+            REQS.labels("oauth_login", "bad_identity").inc()
+            return pb.OAuthLoginReply(ok=False, token="", user="", message="invalid google identity")
+
+        subject_key = f"{provider}:{subject}"
+        with _USERS_LOCK:
+            user_id = _OAUTH_SUBJECTS.get(subject_key)
+            if not user_id or user_id not in _USERS:
+                user_id = next((uid for uid, u in _USERS.items() if u.get("email") == email), "")
+                if not user_id:
+                    user_id = _safe_user_id(email, subject)
+                    _USERS[user_id] = {
+                        "display_name": display_name or email.split("@", 1)[0],
+                        "email": email,
+                        "password_hash": "",
+                        "created_ts_ms": int(time.time() * 1000),
+                    }
+                _OAUTH_SUBJECTS[subject_key] = user_id
+            else:
+                _USERS[user_id]["display_name"] = display_name or _USERS[user_id]["display_name"]
+                _USERS[user_id]["email"] = email
+            token = _issue_token(user_id)
+
+        REQS.labels("oauth_login", "ok").inc()
+        publish_event_sync("mesh.events", {
+            "type": "rpc", "service": SERVICE, "method": "OAuthLogin",
+            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+        })
+        return pb.OAuthLoginReply(ok=True, token=token, user=user_id, message="ok")
 
     def Register(self, request, context):
         t0 = time.time()
@@ -112,8 +174,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
                 "password_hash": _hash(request.password),
                 "created_ts_ms": int(time.time() * 1000),
             }
-        token = f"t-{user_id}-{uuid.uuid4().hex[:12]}"
-        _TOKENS[token] = user_id
+        token = _issue_token(user_id)
         REQS.labels("register", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Register",

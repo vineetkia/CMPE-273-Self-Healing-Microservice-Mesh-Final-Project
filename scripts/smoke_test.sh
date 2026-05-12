@@ -12,7 +12,7 @@ echo "[2/5] all services discovered"
 curl -fsS "$GW/topology" | grep -q '"order"'
 
 echo "[3/5] login"
-TOKEN=$(curl -fsS -X POST "$GW/login" -H 'Content-Type: application/json' -d '{"user":"smoke"}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+TOKEN=$(curl -fsS -X POST "$GW/login" -H 'Content-Type: application/json' -d '{"user":"demo","password":"x"}' | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
 echo "  token=$TOKEN"
 
 echo "[4/5] place order"
