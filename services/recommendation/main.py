@@ -11,7 +11,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -42,7 +42,7 @@ class RecommendationServicer(pb_grpc.RecommendationServiceServicer):
         if state.apply() == "error":
             REQS.labels("suggest", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Suggest", False, int((time.time() - t0) * 1000))
+            _emit("Suggest", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.SuggestReply(ok=False, skus=[])
         seen = {h[1] for h in HISTORY.get(request.user, [])}
@@ -52,7 +52,7 @@ class RecommendationServicer(pb_grpc.RecommendationServiceServicer):
         skus = pool[:limit]
         REQS.labels("suggest", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Suggest", True, int((time.time() - t0) * 1000))
+        _emit("Suggest", True, elapsed_ms(t0))
         return pb.SuggestReply(ok=True, skus=skus)
 
     def RecordEvent(self, request, context):
@@ -60,13 +60,13 @@ class RecommendationServicer(pb_grpc.RecommendationServiceServicer):
         if state.apply() == "error":
             REQS.labels("record", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("RecordEvent", False, int((time.time() - t0) * 1000))
+            _emit("RecordEvent", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.RecordEventReply(ok=False)
         HISTORY[request.user].append((request.event, request.sku, time.time()))
         REQS.labels("record", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("RecordEvent", True, int((time.time() - t0) * 1000))
+        _emit("RecordEvent", True, elapsed_ms(t0))
         return pb.RecordEventReply(ok=True)
 
     def Health(self, request, context):

@@ -11,7 +11,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -75,7 +75,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
             REQS.labels("login", "err").inc()
             publish_event_sync("mesh.events", {
                 "type": "rpc", "service": SERVICE, "method": "Login",
-                "ok": False, "latency_ms": int((time.time() - t0) * 1000),
+                "ok": False, "latency_ms": elapsed_ms(t0),
             })
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("auth login failure injected")
@@ -89,7 +89,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
             REQS.labels("login", "denied").inc()
             publish_event_sync("mesh.events", {
                 "type": "rpc", "service": SERVICE, "method": "Login",
-                "ok": False, "latency_ms": int((time.time() - t0) * 1000),
+                "ok": False, "latency_ms": elapsed_ms(t0),
             })
             return pb.LoginReply(ok=False, token="", message="invalid credentials")
 
@@ -97,7 +97,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
         REQS.labels("login", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Login",
-            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": True, "latency_ms": elapsed_ms(t0),
         })
         return pb.LoginReply(ok=True, token=token, message="ok")
 
@@ -142,7 +142,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
         REQS.labels("oauth_login", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "OAuthLogin",
-            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": True, "latency_ms": elapsed_ms(t0),
         })
         return pb.OAuthLoginReply(ok=True, token=token, user=user_id, message="ok")
 
@@ -178,7 +178,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
         REQS.labels("register", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Register",
-            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": True, "latency_ms": elapsed_ms(t0),
         })
         return pb.RegisterReply(ok=True, token=token, user=user_id, message="account created")
 
@@ -188,7 +188,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
             REQS.labels("validate", "err").inc()
             publish_event_sync("mesh.events", {
                 "type": "rpc", "service": SERVICE, "method": "Validate",
-                "ok": False, "latency_ms": int((time.time() - t0) * 1000),
+                "ok": False, "latency_ms": elapsed_ms(t0),
             })
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("auth validate failure injected")
@@ -197,7 +197,7 @@ class AuthServicer(pb_grpc.AuthServiceServicer):
         REQS.labels("validate", "ok" if ok else "err").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Validate",
-            "ok": ok, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": ok, "latency_ms": elapsed_ms(t0),
         })
         return pb.ValidateReply(ok=ok, user=_TOKENS.get(request.token, ""))
 

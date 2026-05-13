@@ -90,6 +90,17 @@ def _ensure_publisher() -> None:
         _pub_thread_started = True
 
 
+def elapsed_ms(t0: float) -> float:
+    """Return wall-clock elapsed since t0 in milliseconds, with sub-ms precision.
+
+    Most of our gRPC handlers complete in <1 ms; the old `int((now-t0)*1000)`
+    truncated those to 0, which made the dashboard's p95 read 0 for every
+    leaf service. Returning a float preserves the actual signal — the healer
+    averages and percentiles over it, and the UI rounds for display.
+    """
+    return (time.time() - t0) * 1000.0
+
+
 def publish_event_sync(subject: str, payload: dict[str, Any]) -> None:
     """Fire-and-forget. Safe to call from any sync context."""
     payload.setdefault("ts_ms", int(time.time() * 1000))

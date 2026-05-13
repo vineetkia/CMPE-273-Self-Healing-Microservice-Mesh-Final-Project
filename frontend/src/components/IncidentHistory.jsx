@@ -3,6 +3,7 @@
 
 import React, { useState } from "react";
 import { Disclosure, CheckGlyph, XGlyph, relTime } from "./Primitives";
+import { explainIncident, explainAction } from "../lib/plainEnglish";
 
 export function IncidentHistory({ incidents, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -37,17 +38,36 @@ export function IncidentHistory({ incidents, defaultOpen = false }) {
                   </div>
                   {isOpen && (
                     <div className="hist-expand">
-                      <div className="reasoning">
-                        {(inc.rca || []).map(s => s.body).join(" ").replace(/<[^>]+>/g, "")}
+                      <div className="plain-explain">
+                        <div className="label" style={{ marginBottom: 6 }}>What happened</div>
+                        <p className="plain-body">{explainIncident(inc)}</p>
                       </div>
-                      <div className="acts">
-                        {(inc.actions && inc.actions.length) ? inc.actions.map((a, idx) => (
-                          <div key={idx} className="row">
-                            <span className={a.ok ? "ok" : "err"}>{a.ok ? <CheckGlyph size={10} /> : <XGlyph size={10} />}</span>
-                            <span>{a.action} <span style={{ color: "var(--fg-3)" }}>on</span> <code>{a.service}</code></span>
-                            <span style={{ color: "var(--fg-3)" }}>{a.message}</span>
-                          </div>
-                        )) : <span style={{ color: "var(--fg-3)", fontSize: 11.5 }}>no actions recorded</span>}
+                      <div className="plain-actions">
+                        <div className="label" style={{ marginBottom: 6 }}>Remediation steps</div>
+                        {(inc.actions && inc.actions.length) ? inc.actions.map((a, idx) => {
+                          const e = explainAction(a, inc.rootCause);
+                          if (!e) return null;
+                          return (
+                            <div key={idx} className={`plain-action-row ${e.ok ? "ok" : "err"}`}>
+                              <div className="ok-glyph">
+                                {e.ok ? <CheckGlyph size={10} color="var(--signal)" /> : <XGlyph size={10} color="var(--crit)" />}
+                              </div>
+                              <div className="step-num">{idx + 1}</div>
+                              <div className="step-body">
+                                <div className="step-title">
+                                  {e.title} <span className="step-target">on <code>{e.target}</code></span>
+                                </div>
+                                {e.targetBlurb ? (
+                                  <div className="step-blurb">
+                                    <span className="step-blurb-label">about <code>{e.target}</code>:</span> {e.targetBlurb}
+                                  </div>
+                                ) : null}
+                                <div className="step-why">{e.why}</div>
+                                <div className="step-raw">technical: <code>{e.raw}</code></div>
+                              </div>
+                            </div>
+                          );
+                        }) : <span style={{ color: "var(--fg-3)", fontSize: 11.5 }}>no actions recorded</span>}
                       </div>
                     </div>
                   )}

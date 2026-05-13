@@ -2,7 +2,7 @@
    Click row to toggle drill panel; highlights focused row. */
 
 import React from "react";
-import { CountUp, MetricSparkline } from "./Primitives";
+import { CountUp, MetricSparkline, formatLatency } from "./Primitives";
 
 export function ServiceHealth({ services, flowServices, health, sparks, focused, onFocus }) {
   const list = services.filter(s => !flowServices || flowServices.includes(s.id));
@@ -23,7 +23,7 @@ export function ServiceHealth({ services, flowServices, health, sparks, focused,
               onClick={() => onFocus(svc.id === focused ? null : svc.id)}>
               <div className="name"><span className="dot"></span>{svc.label}</div>
               <div className="metric">
-                <div className={`v ${cls}`}><CountUp value={m.p95} decimals={0} suffix="ms" /></div>
+                <div className={`v ${cls} num`}>{formatLatency(m.p95)}</div>
                 <div className="l">p95</div>
               </div>
               <div className="metric">

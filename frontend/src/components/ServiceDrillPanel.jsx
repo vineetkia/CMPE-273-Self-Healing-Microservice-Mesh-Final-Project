@@ -5,7 +5,7 @@
 import React, { useEffect } from "react";
 import {
   StatusPill, CountUp, MetricSparkline, IconBtn, Tooltip,
-  CheckGlyph, XGlyph, ExtLink, relTime,
+  CheckGlyph, XGlyph, ExtLink, relTime, formatLatency,
 } from "./Primitives";
 import { JAEGER_URL, PROM_URL } from "../api/config";
 
@@ -50,7 +50,7 @@ export function ServiceDrillPanel({ svc, services, health, sparks, calls, onClos
       <div className="drill-body">
         <div className="kpi-grid">
           <div className="cell">
-            <div className={`v ${errClass}`}><CountUp value={m.p95} decimals={0} suffix="ms" /></div>
+            <div className={`v ${errClass} num`}>{formatLatency(m.p95)}</div>
             <div className="l">p95 latency</div>
           </div>
           <div className="cell">

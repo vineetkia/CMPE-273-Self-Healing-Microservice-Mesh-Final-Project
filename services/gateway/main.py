@@ -1130,12 +1130,76 @@ def scripted_demo_status():
 
 
 # ============== Bootstrap ==============
+def _warmup_jaeger_operations():
+    """Drive each user-facing flow once shortly after startup so all 7
+    endpoints register in Jaeger's Operations dropdown immediately. Without
+    this, an endpoint like /refund never appears in the UI until someone
+    happens to call it — which makes demos confusing ('why is /refund
+    missing from the dropdown?'). This thread fires-and-forgets in the
+    background a few seconds after server start.
+    """
+    import time as _t
+    _t.sleep(8)  # give downstream services time to register in etcd
+    try:
+        ch = _channel("auth")
+        stub = pb_grpc.AuthServiceStub(ch)
+        rep = stub.Login(pb.LoginRequest(user="demo", password="x"), timeout=3.0)
+        if not rep.ok:
+            log.warning("warmup: demo login failed; skipping flow warmup")
+            return
+        token = rep.token
+
+        # Hit each flow via its real handler so FastAPI auto-instrumentation
+        # records a `POST /flow` operation. We call the handlers in-process —
+        # the OTel FastAPI instrumentation hooks the route layer, so calling
+        # the function directly DOESN'T emit a span. We need real HTTP.
+        # Use httpx to loop back through localhost so each flow shows up.
+        import httpx as _httpx
+        base = "http://127.0.0.1:8080"
+        seeds = [
+            ("POST", "/checkout",          {"token": token, "sku": "sku-1", "qty": 1, "zip": "94110"}),
+            ("POST", "/orders",            {"token": token, "sku": "sku-1", "qty": 1}),
+            ("POST", "/cart/merge",        {"token": token, "guest_cart_id": "g-warmup", "skus": ["sku-1", "sku-2"]}),
+            ("POST", "/inventory/restock", {"token": token, "sku": "sku-1", "qty": 1}),
+            ("GET",  "/recommendations/demo?limit=4", None),
+        ]
+        order_id_for_review = None
+        with _httpx.Client(timeout=5.0) as client:
+            for method, path, body in seeds:
+                try:
+                    if method == "GET":
+                        client.get(base + path)
+                    else:
+                        r = client.post(base + path, json=body)
+                        # Capture an order id so we can warm /refund and /fraud/review.
+                        if path == "/orders":
+                            try:
+                                order_id_for_review = r.json().get("order_id")
+                            except Exception:
+                                pass
+                except Exception as e:
+                    log.warning(f"warmup: {method} {path} -> {e}")
+            if order_id_for_review:
+                for path, body in [
+                    ("/refund",       {"token": token, "order_id": order_id_for_review}),
+                    ("/fraud/review", {"token": token, "order_id": order_id_for_review}),
+                ]:
+                    try:
+                        client.post(base + path, json=body)
+                    except Exception as e:
+                        log.warning(f"warmup: POST {path} -> {e}")
+        log.info("jaeger operations warmup complete")
+    except Exception as e:
+        log.warning(f"warmup thread failed: {e}")
+
+
 def main():
     os.environ.setdefault("SERVICE_NAME", SERVICE)
     init_tracing(SERVICE)
     FastAPIInstrumentor.instrument_app(app)
     port = int(os.getenv("PORT", "8080"))
     register(SERVICE, f"{SERVICE}:{port}")
+    threading.Thread(target=_warmup_jaeger_operations, daemon=True).start()
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 

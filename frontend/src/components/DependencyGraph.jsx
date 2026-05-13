@@ -3,6 +3,7 @@
    aware particles, click-to-drill. */
 
 import React, { useState, useEffect, useRef } from "react";
+import { formatLatency } from "./Primitives";
 
 const NODE_W = 168;
 const NODE_H = 64;
@@ -98,7 +99,7 @@ function ServiceNode({ svc, pos, m, focused, faulty, victim, onPointerDown, kind
         {kind === "edge" ? "EDGE" : "SVC"}
       </text>
       <text x={14} y={44} fontFamily="var(--mono)" fontSize="11" fill="var(--fg-2)" pointerEvents="none">p95</text>
-      <text x={42} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{Math.round(m.p95)}ms</text>
+      <text x={42} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{formatLatency(m.p95)}</text>
       <text x={94} y={44} fontFamily="var(--mono)" fontSize="11" fill="var(--fg-2)" pointerEvents="none">err</text>
       <text x={118} y={44} fontFamily="var(--mono)" fontSize="11" fill={valueColor} pointerEvents="none">{(m.err * 100).toFixed(1)}%</text>
       <text x={14} y={56} fontFamily="var(--mono)" fontSize="10" fill="var(--fg-3)" pointerEvents="none">{Math.round(m.rps)} rps</text>

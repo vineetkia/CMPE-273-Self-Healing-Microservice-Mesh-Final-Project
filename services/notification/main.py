@@ -14,7 +14,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -103,7 +103,7 @@ class NotificationServicer(pb_grpc.NotificationServiceServicer):
             REQS.labels("notify", "err").inc()
             publish_event_sync("mesh.events", {
                 "type": "rpc", "service": SERVICE, "method": "Notify",
-                "ok": False, "latency_ms": int((time.time() - t0) * 1000),
+                "ok": False, "latency_ms": elapsed_ms(t0),
             })
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("notify failure injected")
@@ -122,7 +122,7 @@ class NotificationServicer(pb_grpc.NotificationServiceServicer):
         REQS.labels("notify", "ok").inc()
         publish_event_sync("mesh.events", {
             "type": "rpc", "service": SERVICE, "method": "Notify",
-            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+            "ok": True, "latency_ms": elapsed_ms(t0),
         })
         return pb.NotifyReply(ok=True)
 

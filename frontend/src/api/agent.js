@@ -112,7 +112,10 @@ export async function fetchAgent() {
     services[id] = {
       p95: m.p95_latency_ms || 0,
       err: m.error_rate || 0,
-      rps: Math.round(n / 20),
+      // Sub-rps precision: 194 events / 20s = 9.7 (not 10). The UI rounds
+      // for compact display but the underlying number stays accurate so the
+      // global throughput in TopBar reflects what the user actually set.
+      rps: n / 20,
       n,
       circuit_opens: m.circuit_opens_in_window || 0,
       status: m.health || "unknown",

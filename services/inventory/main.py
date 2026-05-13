@@ -9,7 +9,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -23,9 +23,22 @@ LAT = Histogram("inventory_request_latency_seconds", "latency",
 SERVICE = "inventory"
 state = FailureState()
 STOCK: dict[str, int] = {
-    "sku-1": 100, "sku-2": 50, "sku-3": 25,
-    "sku-4": 80,  "sku-5": 40, "sku-6": 12, "sku-7": 0,
+    "sku-1": 5000, "sku-2": 5000, "sku-3": 5000,
+    "sku-4": 5000, "sku-5": 5000, "sku-6": 5000, "sku-7": 5000,
 }
+# Auto-restock floor + target. Background loop keeps every SKU above _RESTOCK_FLOOR
+# so the demo traffic generator can't drain stock and silently fail the graph.
+# Restocking is a real warehouse concern; for the class demo we make it automatic.
+_RESTOCK_FLOOR = 200
+_RESTOCK_TARGET = 5000
+
+
+def _stock_keeper():
+    while True:
+        for sku, qty in list(STOCK.items()):
+            if qty < _RESTOCK_FLOOR:
+                STOCK[sku] = _RESTOCK_TARGET
+        time.sleep(15)
 
 
 def _emit(method: str, ok: bool, ms: int):
@@ -40,7 +53,7 @@ class InventoryServicer(pb_grpc.InventoryServiceServicer):
         t0 = time.time()
         # Apply failure mode (latency / errors / grey).
         if state.apply() == "error":
-            ms = int((time.time() - t0) * 1000)
+            ms = elapsed_ms(t0)
             REQS.labels("reserve", "err").inc()
             LAT.observe(time.time() - t0)
             _emit("Reserve", False, ms)
@@ -52,12 +65,12 @@ class InventoryServicer(pb_grpc.InventoryServiceServicer):
         if cur < request.qty:
             REQS.labels("reserve", "out_of_stock").inc()
             LAT.observe(time.time() - t0)
-            _emit("Reserve", False, int((time.time() - t0) * 1000))
+            _emit("Reserve", False, elapsed_ms(t0))
             return pb.ReserveReply(ok=False, message="out of stock", remaining=cur)
         STOCK[request.sku] = cur - request.qty
         REQS.labels("reserve", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Reserve", True, int((time.time() - t0) * 1000))
+        _emit("Reserve", True, elapsed_ms(t0))
         return pb.ReserveReply(ok=True, message="reserved", remaining=STOCK[request.sku])
 
     def Release(self, request, context):
@@ -65,13 +78,13 @@ class InventoryServicer(pb_grpc.InventoryServiceServicer):
         if state.apply() == "error":
             REQS.labels("release", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Release", False, int((time.time() - t0) * 1000))
+            _emit("Release", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.ReleaseReply(ok=False, remaining=0)
         STOCK[request.sku] = STOCK.get(request.sku, 0) + request.qty
         REQS.labels("release", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Release", True, int((time.time() - t0) * 1000))
+        _emit("Release", True, elapsed_ms(t0))
         return pb.ReleaseReply(ok=True, remaining=STOCK[request.sku])
 
     def Restock(self, request, context):
@@ -79,13 +92,13 @@ class InventoryServicer(pb_grpc.InventoryServiceServicer):
         if state.apply() == "error":
             REQS.labels("restock", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Restock", False, int((time.time() - t0) * 1000))
+            _emit("Restock", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.RestockReply(ok=False, remaining=0)
         STOCK[request.sku] = STOCK.get(request.sku, 0) + request.qty
         REQS.labels("restock", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Restock", True, int((time.time() - t0) * 1000))
+        _emit("Restock", True, elapsed_ms(t0))
         return pb.RestockReply(ok=True, remaining=STOCK[request.sku])
 
     def StockCheck(self, request, context):
@@ -93,13 +106,13 @@ class InventoryServicer(pb_grpc.InventoryServiceServicer):
         if state.apply() == "error":
             REQS.labels("stock_check", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("StockCheck", False, int((time.time() - t0) * 1000))
+            _emit("StockCheck", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.StockCheckReply(levels=[])
         levels = [pb.StockLevel(sku=s, remaining=STOCK.get(s, 0)) for s in request.skus]
         REQS.labels("stock_check", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("StockCheck", True, int((time.time() - t0) * 1000))
+        _emit("StockCheck", True, elapsed_ms(t0))
         return pb.StockCheckReply(levels=levels)
 
     def Health(self, request, context):
@@ -137,6 +150,7 @@ def main():
     threading.Thread(target=start_http_server, args=(metrics_port,), daemon=True).start()
     register(SERVICE, f"{SERVICE}:{port}")
     start_chaos_listener(SERVICE, state)
+    threading.Thread(target=_stock_keeper, daemon=True).start()
 
     def _wire(server):
         pb_grpc.add_InventoryServiceServicer_to_server(InventoryServicer(), server)

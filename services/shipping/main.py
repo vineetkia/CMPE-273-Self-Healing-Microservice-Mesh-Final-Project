@@ -11,7 +11,7 @@ import mesh_pb2_grpc as pb_grpc
 
 from shared.logging import get_logger
 from shared.discovery import register
-from shared.telemetry import init_tracing, publish_event_sync
+from shared.telemetry import init_tracing, publish_event_sync, elapsed_ms
 from shared.failure_modes import FailureState
 from shared.chaos_listener import start as start_chaos_listener
 from shared.grpc_server import serve
@@ -40,7 +40,7 @@ class ShippingServicer(pb_grpc.ShippingServiceServicer):
         if state.apply() == "error":
             REQS.labels("quote", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("Quote", False, int((time.time() - t0) * 1000))
+            _emit("Quote", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.QuoteReply(ok=False, cents=0, eta_days=0)
         # Toy pricing: 599 + 50 per qty.
@@ -48,7 +48,7 @@ class ShippingServicer(pb_grpc.ShippingServiceServicer):
         eta = random.choice([2, 3, 4, 5])
         REQS.labels("quote", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("Quote", True, int((time.time() - t0) * 1000))
+        _emit("Quote", True, elapsed_ms(t0))
         return pb.QuoteReply(ok=True, cents=cents, eta_days=eta)
 
     def CreateLabel(self, request, context):
@@ -56,14 +56,14 @@ class ShippingServicer(pb_grpc.ShippingServiceServicer):
         if state.apply() == "error":
             REQS.labels("label", "err").inc()
             LAT.observe(time.time() - t0)
-            _emit("CreateLabel", False, int((time.time() - t0) * 1000))
+            _emit("CreateLabel", False, elapsed_ms(t0))
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb.LabelReply(ok=False, tracking_id="", message="label failure injected")
         tid = f"trk_{uuid.uuid4().hex[:10]}"
         LABELS[tid] = {"order_id": request.order_id, "user": request.user, "sku": request.sku, "qty": request.qty}
         REQS.labels("label", "ok").inc()
         LAT.observe(time.time() - t0)
-        _emit("CreateLabel", True, int((time.time() - t0) * 1000))
+        _emit("CreateLabel", True, elapsed_ms(t0))
         return pb.LabelReply(ok=True, tracking_id=tid, message="label created")
 
     def Health(self, request, context):

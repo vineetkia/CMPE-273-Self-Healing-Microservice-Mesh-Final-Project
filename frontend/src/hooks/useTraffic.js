@@ -12,17 +12,27 @@ export function useTraffic() {
       timerRef.current = null;
       return;
     }
-    const interval = Math.max(50, Math.round(1000 / Math.max(1, traffic.rps)));
-    timerRef.current = setInterval(async () => {
-      try {
-        const order = await placeOrder();
-        setOrders(prev => [order, ...prev].slice(0, 24));
-      } catch {
-        setOrders(prev => [{
+    // Fractional accumulator: each tick adds `targetPerTick` (a float) to a
+    // running budget, and we fire the integer portion. This lets a 100ms tick
+    // deliver an *exact* slider rate — 21 rps → 2.1 per tick → fires 2, 2, 3,
+    // 2, 2, 3 … averaging exactly 21/s. Without this, naive Math.round(rps/10)
+    // quantises into 10-rps steps and the dashboard reads ≈20 for sliders 11-25.
+    const TICK_MS = 100;
+    const targetPerTick = (traffic.rps * TICK_MS) / 1000;
+    let budget = 0;
+    const fire = () => {
+      placeOrder()
+        .then(order => setOrders(prev => [order, ...prev].slice(0, 24)))
+        .catch(() => setOrders(prev => [{
           ts: Date.now(), id: "#---", sku: "", who: "", status: "failed", latency_ms: 0,
-        }, ...prev].slice(0, 24));
-      }
-    }, interval);
+        }, ...prev].slice(0, 24)));
+    };
+    timerRef.current = setInterval(() => {
+      budget += targetPerTick;
+      const toFire = Math.floor(budget);
+      budget -= toFire;
+      for (let i = 0; i < toFire; i++) fire();
+    }, TICK_MS);
     return () => clearInterval(timerRef.current);
   }, [traffic.running, traffic.rps]);
 
