@@ -118,7 +118,25 @@ create_or_update_app() {
   local name="$1"
   shift
   if az containerapp show --name "$name" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
-    echo "Container app ${name} already exists; leaving it unchanged."
+    local image=""
+    local args=("$@")
+    for ((i = 0; i < ${#args[@]}; i++)); do
+      if [ "${args[$i]}" = "--image" ] && [ $((i + 1)) -lt ${#args[@]} ]; then
+        image="${args[$((i + 1))]}"
+        break
+      fi
+    done
+
+    if [ -n "$image" ]; then
+      echo "Container app ${name} exists; updating image to ${image}."
+      az containerapp update \
+        --name "$name" \
+        --resource-group "$RESOURCE_GROUP" \
+        --image "$image" \
+        -o none
+    else
+      echo "Container app ${name} already exists; leaving it unchanged."
+    fi
   else
     az containerapp create --name "$name" --resource-group "$RESOURCE_GROUP" --environment "$ENV_NAME" "$@" -o table
   fi
