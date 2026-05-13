@@ -184,6 +184,27 @@ function Dashboard({ auth, navigate }) {
     () => computeLayout(flowServices, flowEdges),
     [flows.activeFlow, flowServices.length, flowEdges.length],
   );
+
+  // Full-mesh view: union of all flow edges across every flow. Used by the
+  // IncidentHistory blast-radius diagrams — historical incidents may span
+  // any flow, so we always show the complete topology for those.
+  const allServices = mesh.services;
+  const allEdges = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const f of Object.values(flows.flows || {})) {
+      for (const [a, b] of f.edges || []) {
+        const k = `${a}>${b}`;
+        if (!seen.has(k)) { seen.add(k); out.push([a, b]); }
+      }
+    }
+    return out;
+  }, [flows.flows]);
+  const allLayout = useMemo(
+    () => computeLayout(allServices, allEdges),
+    [allServices.length, allEdges.length],
+  );
+
   const faulty = mesh.incident ? mesh.incident.rootCause : null;
 
   const focusOnGraph = (id) => setDrill(id === drill ? null : id);
@@ -357,7 +378,12 @@ function Dashboard({ auth, navigate }) {
               actions={mesh.actions}
               onMarkResolved={chaos.clear}
             />
-            <IncidentHistory incidents={mesh.incidents} />
+            <IncidentHistory
+              incidents={mesh.incidents}
+              services={allServices}
+              edges={allEdges}
+              layout={allLayout}
+            />
             <AgentDecisionsFeed decisions={mesh.decisions} lastTickAt={mesh.lastTickAt} />
           </div>
 

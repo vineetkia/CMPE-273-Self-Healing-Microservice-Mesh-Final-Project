@@ -1670,6 +1670,28 @@ h1, h2, h3 { margin: 0; font-weight: 500; letter-spacing: -0.015em; }
 }
 .plain-action-row.err .step-title { color: var(--crit); }
 
+/* Incident-history expand: summary + blast-radius side-by-side at top */
+.hist-expand .hist-explain-row {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: var(--s-4);
+  align-items: start;
+  border-bottom: 1px solid var(--hairline);
+}
+.hist-expand .hist-summary {
+  border-bottom: 0;            /* the row owns the bottom border */
+  background: transparent;     /* expand row already has its own bg */
+  padding: var(--s-4) var(--s-5) var(--s-3);
+}
+.hist-expand .hist-mini-graph {
+  width: auto;                 /* let the grid column own the width */
+  margin: var(--s-3) var(--s-4) var(--s-3) 0;
+}
+@media (max-width: 1100px) {
+  .hist-expand .hist-explain-row { grid-template-columns: 1fr; }
+  .hist-expand .hist-mini-graph { margin: 0 var(--s-4) var(--s-4); }
+}
+
 /* "Traces" link in hero crumbs — deep-links into Jaeger for the active flow */
 .hero-overlay .jaeger-link {
   display: inline-flex; align-items: center; gap: 6px;

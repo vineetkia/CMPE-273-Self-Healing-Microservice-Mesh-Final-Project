@@ -3,9 +3,16 @@
 
 import React, { useState } from "react";
 import { Disclosure, CheckGlyph, XGlyph, relTime } from "./Primitives";
+import { MiniDependencyGraph } from "./DependencyGraph";
 import { explainIncident, explainAction } from "../lib/plainEnglish";
 
-export function IncidentHistory({ incidents, defaultOpen = false }) {
+export function IncidentHistory({
+  incidents,
+  services = [],
+  edges = [],
+  layout = {},
+  defaultOpen = false,
+}) {
   const [open, setOpen] = useState(defaultOpen);
   const [expanded, setExpanded] = useState(null);
 
@@ -38,9 +45,32 @@ export function IncidentHistory({ incidents, defaultOpen = false }) {
                   </div>
                   {isOpen && (
                     <div className="hist-expand">
-                      <div className="plain-explain">
-                        <div className="label" style={{ marginBottom: 6 }}>What happened</div>
-                        <p className="plain-body">{explainIncident(inc)}</p>
+                      <div className="hist-explain-row">
+                        <div className="plain-explain hist-summary">
+                          <div className="label" style={{ marginBottom: 6 }}>What happened</div>
+                          <p className="plain-body">{explainIncident(inc)}</p>
+                        </div>
+                        {services.length > 0 && layout && Object.keys(layout).length > 0 ? (
+                          <div className="mini-graph hist-mini-graph">
+                            <div className="mg-head">
+                              <div className="label">Blast radius</div>
+                              <div className="mg-legend">
+                                <span><span className="dot root"></span>root</span>
+                                <span><span className="dot vict"></span>victim</span>
+                                <span><span className="dot heal"></span>healthy</span>
+                              </div>
+                            </div>
+                            <MiniDependencyGraph
+                              services={services}
+                              edges={edges}
+                              layout={layout}
+                              faulty={inc.rootCause}
+                            />
+                            <div className="mg-foot">
+                              <span><span className="k" style={{ color: "var(--fg-4)" }}>impacted</span> <span className="v crit">{(inc.suspects || []).length + (inc.rootCause ? 1 : 0)}</span> / {services.length}</span>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="plain-actions">
                         <div className="label" style={{ marginBottom: 6 }}>Remediation steps</div>
