@@ -29,11 +29,11 @@
 
 ## Team
 
-| Member | Contribution |
-|---|---|
-| **Vineet Kumar** | Frontend development, Integration across components, Project bootstrap code, system design, documentation, and dependency graph first-paint viewport fit |
-| **Samved Sandeep Joshi** | Chaos panel UX labels and tooltips, traffic and chaos panel layout alignment, AWS deployment readiness, registration/profile/notification backend work, and authenticated frontend pages |
-| **Girith Choudhary** | Google OAuth integration, GCP infrastructure and deployment documentation, Azure VM and Container Apps deployment scripts, dashboard observability/AWS-readiness work, and blast-radius incident history diagrams |
+| Member | SJSU ID | Primary contribution areas |
+|---|---|---|
+| **Vineet Kumar** ([@vineetkia](https://github.com/vineetkia)) | 019140433 | Repository bootstrap and Docker Compose orchestration, gRPC proto contracts and shared package layout, retry/timeout/circuit-breaker resilience primitives, dependency-graph root-cause analysis algorithm, bounded remediation command surfaces, React + Vite dashboard shell, dependency graph SVG visualization, flow selector and flow API client, incident history and shortcut overlay UI, Prometheus + OpenTelemetry collector configs, demo + failure-injection scripts, enterprise-grade README. |
+| **Samved Sandeep Joshi** ([samvedsandeep.joshi@sjsu.edu](mailto:samvedsandeep.joshi@sjsu.edu)) | 019100107 | Baseline auth and notification gRPC handlers, order orchestration across checkout dependencies, payments + fraud + shipping + inventory + recommendation services, service health cards + top bar + base dashboard layout, traffic generator UI + polling hook, chaos injector controls + API hook, capitalized chaos panel labels + tooltips, flow exerciser + drill-call hook + walkthrough UI, traffic/chaos panel height alignment, frontend + gateway configuration for AWS deployment, hosted-env Dockerfiles + compose settings, registration + profile + notification proto fields, backend registration/profile/notification storage flows, landing/login/register/profile pages, auth + route + notification hooks + bell, integrated React auth flow replacing static pages. |
+| **Girith Choudhary** ([girithmchoudhary@gmail.com](mailto:girithmchoudhary@gmail.com)) | 018281744 | Gateway REST facade over the gRPC mesh, gateway flow execution + command + service health clients, healer agent event ingestion + mesh state tracking, Google OAuth integration + authentication config, service instrumentation with OpenTelemetry and Logfire, GCP VM deployment compose + setup scripts, Vercel + Render + GCP deployment documentation, Azure VM scripts (create/start/stop/delete) + Docker install bootstrap, Azure Container Apps deployment script + guide, Azure Prometheus + OTel collector containers, plain-English incident summaries + dashboard explanation helpers, dashboard observability cards + service drill panels, healer decisions + telemetry context surfacing on the frontend, blast-radius diagram in expanded incident history, Azure Container Apps image-refresh deployment update. |
 
 > **Instructor:** Prof. **Rakesh Ranjan** · *San José State University · Department of Computer Engineering · CMPE-273: Enterprise Distributed Systems · Spring 2026*
 
@@ -53,7 +53,7 @@
 10. [API Reference](#api-reference)
 11. [Observability Stack](#observability-stack)
 12. [Failure Injection Reference](#failure-injection-reference)
-13. [Manual Testing](#manual-testing)
+13. [Testing](#testing)
 14. [Engineering Decisions & Tradeoffs](#engineering-decisions--tradeoffs)
 
 ---
@@ -744,12 +744,47 @@ curl -X POST 'localhost:8080/chaos/clear?service=payments'
 
 ---
 
-## Manual Testing
+## Testing
+
+The project ships **three layers of testing**, each targeting a different scope.
+
+### 1. Unit tests — pure logic, no Docker required
+
+A `pytest` suite under [`tests/`](./tests/) covers every safety- and correctness-critical primitive in the codebase.
 
 ```bash
-# baseline
-TOKEN=$(curl -s -X POST localhost:8080/login -H 'content-type: application/json' \
-  -d '{"user":"alice"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+# 69 tests, runs in under 2 seconds
+make test
+# or directly:
+python3 -m pytest tests/
+```
+
+| Test file | What it covers |
+|---|---|
+| [`test_resilience.py`](./tests/test_resilience.py) | Retry-with-backoff (3 attempts, exponential), circuit breaker state machine (closed → open → half-open → closed), `CircuitOpenError` semantics |
+| [`test_failure_modes.py`](./tests/test_failure_modes.py) | `FailureState` chaos primitive: errors mode at full/zero rate, latency-mode sleep, grey-mode combination, auto-expiry, `clear()` semantics |
+| [`test_healer_logic.py`](./tests/test_healer_logic.py) | The healer's 2-of-3 consensus rule, threshold boundaries, dependency-graph walk for root-cause selection, the 4-verb × 8-service action allowlist invariant, drift detection against the production source |
+| [`test_healer_telemetry.py`](./tests/test_healer_telemetry.py) | `ServiceStats` sliding-window metrics, error-rate computation, p95 latency with sub-millisecond precision, deque-capacity behaviour under load |
+| [`test_telemetry_helpers.py`](./tests/test_telemetry_helpers.py) | `elapsed_ms()` returns sub-millisecond floats (the latency-precision fix) |
+| [`test_auth_service.py`](./tests/test_auth_service.py) | Auth password hashing (salt + SHA256), user-id derivation, edge cases (empty/invalid emails, special chars) |
+
+The tests are deliberately decoupled from the runtime dependency tree (no gRPC, OpenTelemetry, NATS, etcd at test time). They reimplement the pure-logic functions locally AND assert that the production source files still contain the same implementations — so any drift between tests and production code surfaces immediately.
+
+### 2. End-to-end smoke — full stack on Docker
+
+```bash
+make smoke         # ./scripts/smoke_test.sh
+```
+
+Brings the stack up, hits `/health`, logs in, places an order through the full gRPC fan-out (gateway → order → auth → inventory → notification), and confirms the healer is reachable.
+
+### 3. Chaos drills — interactive
+
+```bash
+# baseline traffic
+TOKEN=$(curl -s -X POST localhost:8080/login \
+  -H 'content-type: application/json' -d '{"user":"alice"}' \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
 
 # place an order via full-fat checkout
 curl -X POST localhost:8080/checkout -H 'content-type: application/json' \
@@ -758,12 +793,14 @@ curl -X POST localhost:8080/checkout -H 'content-type: application/json' \
 # inject grey failure on payments
 ./scripts/inject_failure.sh payments grey 0.4 600 60
 
-# watch healer decide
+# watch the healer decide
 watch -n1 'curl -s localhost:8090/state | python3 -m json.tool | head -60'
 
 # clear it manually
 curl -X POST 'localhost:8080/chaos/clear?service=payments'
 ```
+
+Or use the dashboard's chaos panel + per-flow ▶ buttons for a one-click curated drill.
 
 ---
 
