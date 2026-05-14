@@ -17,4 +17,6 @@ missfont.log
 # Local-only docs (Demo.md and AWS plan are not for the repo)
 Demo.md
 AWS-Deployment-Plan.md
+GitHub-Contribution.tex
+GitHub-Contribution.pdf
 *.local.md
