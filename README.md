@@ -31,7 +31,7 @@
 
 | Member | Contribution |
 |---|---|
-| **Vineet Kumar** | Frontend development, Project bootstrap code, system design, documentation, and dependency graph first-paint viewport fit, backend integration with frontend |
+| **Vineet Kumar** | Frontend development, Integration across components, Project bootstrap code, system design, documentation, and dependency graph first-paint viewport fit |
 | **Samved Sandeep Joshi** | Chaos panel UX labels and tooltips, traffic and chaos panel layout alignment, AWS deployment readiness, registration/profile/notification backend work, and authenticated frontend pages |
 | **Girith Choudhary** | Google OAuth integration, GCP infrastructure and deployment documentation, Azure VM and Container Apps deployment scripts, dashboard observability/AWS-readiness work, and blast-radius incident history diagrams |
 
